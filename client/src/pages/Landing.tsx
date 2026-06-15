@@ -43,7 +43,7 @@ const JTBD = [
 const FEED = [
   "Flagged Job 412 — rough-in 23% over budget, $86.9K at risk",
   "Drafted change order on Job 412 to capture the out-of-scope rough-in",
-  "Surfaced margin erosion on Job 207 — variance summary ready for the PM",
+  "Reforecast Job 207 — bid ran light; wrote the gap back to your estimate",
   "Caught under-billed T&M on Job 132 — $31K recoverable, billing drafted",
   "Reforecast Job 88 cost-to-complete at the corrected production rate",
 ];
@@ -436,9 +436,10 @@ export default function Landing() {
             </div>
           </motion.div>
 
-          <motion.p {...fadeUp} className="mt-12 text-sm text-ink-500">
-            Today: the ops team. Next: smarter bids for preconstruction, a live
-            margin roll-up for finance.
+          <motion.p {...fadeUp} className="mt-12 max-w-3xl text-sm leading-relaxed text-ink-500">
+            Cost Agent is the always-on employee you hire to protect margin
+            across the whole job — labor-cost vigilance for ops today;
+            estimating, finance, and every role that touches margin next.
           </motion.p>
           <p className="mt-3 text-xs text-ink-400">{DISCLAIMER}</p>
         </div>
@@ -455,8 +456,8 @@ export default function Landing() {
             <span className="text-brand-600">you&apos;ve won.</span>
           </motion.h2>
           <motion.p {...fadeUp} className="mx-auto mt-5 max-w-xl text-lg text-ink-500">
-            See Cost Agent work a live portfolio — surface the risks
-            that matter and take the fix to done, on your approval.
+            Put an always-on employee on your margin — Cost Agent surfaces the
+            risks that matter and takes the fix to done, on your approval.
           </motion.p>
           <motion.div {...fadeUp} className="mt-9">
             <Button size="lg" onClick={() => navigate("/app")}>
@@ -532,10 +533,11 @@ function AgentDiagram() {
             />
           </div>
         ))}
-        {/* glowing focal node */}
+        {/* glowing focal node — two blinking eyes make the agent feel alive */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="node-pulse relative flex h-16 w-16 items-center justify-center rounded-full bg-brand-600 text-white">
-            <Radar className="h-6 w-6" />
+          <div className="node-pulse relative flex h-16 w-16 items-center justify-center gap-1.5 rounded-full bg-brand-600">
+            <span className="agent-eye" />
+            <span className="agent-eye" />
           </div>
         </div>
       </div>

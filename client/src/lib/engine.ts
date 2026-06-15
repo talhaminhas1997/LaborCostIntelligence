@@ -54,8 +54,8 @@ const KIND: Record<
   rework: {
     label: "Quality rework (mostly sunk)",
     recoverability: "low",
-    firstStep: "Update live budget",
-    firstArtifact: (n) => `Job ${n} budget re-baselined`,
+    firstStep: "Carry rework allowance",
+    firstArtifact: (n) => `Rework allowance set on Job ${n}`,
   },
 };
 
@@ -153,11 +153,11 @@ function buildPlan(
       artifact: "Margin reforecast updated",
     },
     {
-      id: "alert",
-      label: "Alert PM",
-      detail: "Variance summary + recommended owner conversation",
+      id: "budget",
+      label: "Update the live budget",
+      detail: "Post the reforecast to the job's live budget and cost-to-complete",
       targetsDollars: 0,
-      artifact: "PM notified",
+      artifact: "Live budget updated",
     },
     {
       id: "learn",
