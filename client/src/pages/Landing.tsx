@@ -159,7 +159,7 @@ export default function Landing() {
             className="mt-8 max-w-5xl text-[2.6rem] font-extrabold leading-[0.98] tracking-[-0.03em] text-maroon sm:text-7xl"
           >
             Stop sweating your margins.{" "}
-            <span className="text-brand-600">Start running more jobs.</span>
+            <span className="text-maroon">Start running more jobs.</span>
           </motion.h1>
           <motion.p
             {...fadeUp}
@@ -239,7 +239,7 @@ export default function Landing() {
                   <li key={inp.label} className="flex items-start gap-2.5">
                     <span
                       className={`signal-pulse mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                        inp.live ? "bg-brand-500" : "bg-ink-300"
+                        inp.live ? "bg-maroon" : "bg-ink-300"
                       }`}
                       style={{ animationDelay: `${i * 0.4}s` }}
                     />
@@ -251,7 +251,7 @@ export default function Landing() {
                       {inp.label}
                     </span>
                     {inp.live ? (
-                      <span className="mt-0.5 shrink-0 text-[9px] font-semibold tracking-[0.15em] text-brand-600">
+                      <span className="mt-0.5 shrink-0 text-[9px] font-semibold tracking-[0.15em] text-maroon">
                         LIVE
                       </span>
                     ) : (
@@ -283,9 +283,9 @@ export default function Landing() {
               </div>
 
               {/* TODAY — lit, framed as jobs-to-be-done */}
-              <div className="mt-5 rounded-xl border border-brand-200 bg-neutral-100 p-4">
-                <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-                  <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
+              <div className="mt-5 rounded-xl border border-maroon/20 bg-neutral-100 p-4">
+                <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-maroon">
+                  <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-maroon" />
                   Today · Ops
                 </div>
                 <ul className="space-y-2">
@@ -294,7 +294,7 @@ export default function Landing() {
                       key={j}
                       className="flex items-start gap-2 text-sm font-medium text-maroon"
                     >
-                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-500" />
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-maroon" />
                       {j}
                     </li>
                   ))}
@@ -355,7 +355,7 @@ export default function Landing() {
                     {o.n} · {o.kicker}
                   </div>
                   {o.badge && (
-                    <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-brand-700">
+                    <span className="rounded-full border border-maroon/20 bg-maroon/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-maroon">
                       {o.badge}
                     </span>
                   )}
@@ -415,13 +415,13 @@ export default function Landing() {
                 </ul>
               </div>
               <div className="bg-white p-7">
-                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-brand-600">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-maroon">
                   Margin Agent adds
                 </div>
                 <ul className="mt-4 space-y-2.5">
                   {AGENT_ADDS.map((a) => (
                     <li key={a} className="flex items-start gap-2.5 text-sm font-medium text-maroon">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-maroon" />
                       {a}
                     </li>
                   ))}
@@ -572,9 +572,9 @@ function AgentFeed() {
   }, [reduce, inView]);
 
   return (
-    <div ref={ref} className="mt-4 border-t border-brand-200/70 pt-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-brand-600">
-        <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
+    <div ref={ref} className="mt-4 border-t border-ink-200 pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-maroon">
+        <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-maroon" />
         Live
       </div>
       {/* Fixed height so ticking actions never resize the box. */}
@@ -590,7 +590,7 @@ function AgentFeed() {
               transition={{ duration: 0.35 }}
               className="flex items-start gap-2 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5"
             >
-              <Activity className="mt-0.5 h-3 w-3 shrink-0 text-brand-600" />
+              <Activity className="mt-0.5 h-3 w-3 shrink-0 text-maroon" />
               <span className="text-[11px] leading-snug text-ink-600">
                 {item.text}
               </span>
@@ -638,7 +638,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
     <div
       ref={ref}
       className={`rounded-2xl border p-6 ${
-        isAgent ? "border-brand-200 bg-white" : "border-ink-200 bg-white"
+        isAgent ? "border-maroon/20 bg-white" : "border-ink-200 bg-white"
       }`}
     >
       <div className="flex items-center gap-3">
@@ -662,7 +662,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
               <span
                 key={i}
                 className={`aspect-square rounded-[3px] ${
-                  i < SCOPE_LIT_ALONE ? "bg-brand-500" : "bg-ink-100"
+                  i < SCOPE_LIT_ALONE ? "bg-maroon" : "bg-ink-100"
                 }`}
               />
             );
@@ -674,7 +674,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
               key={i}
               className="aspect-square rounded-[3px]"
               initial={{ backgroundColor: "#f1f5f9" }}
-              animate={{ backgroundColor: lit ? "#7c5cff" : "#f1f5f9" }}
+              animate={{ backgroundColor: lit ? "#260F14" : "#f1f5f9" }}
               transition={{ duration: 0.4, delay: reduce ? 0 : delay }}
             />
           );
@@ -682,11 +682,11 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
       </div>
 
       {isAgent && (
-        <div className="mt-5 flex items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2">
-          <span className="node-pulse relative flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white">
+        <div className="mt-5 flex items-center gap-2 rounded-lg border border-maroon/20 bg-white px-3 py-2">
+          <span className="node-pulse relative flex h-6 w-6 items-center justify-center rounded-full bg-maroon text-white">
             <Radar className="h-3.5 w-3.5" />
           </span>
-          <span className="text-xs font-medium text-brand-700">
+          <span className="text-xs font-medium text-maroon">
             Margin Agent · watching all 30
           </span>
         </div>
@@ -697,7 +697,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
 
 /* ---- Per-card minimal node diagrams (one glowing focal node each) ---- */
 const DIA_LINE = "#cbd5e1"; // ink-300
-const DIA_BRAND = "#6938ef"; // brand-600
+const DIA_BRAND = "#260F14"; // maroon — the dark agent mark in the card diagrams
 const DIA_MAROON = "#260f14";
 
 function Focal({ cx, cy }: { cx: number; cy: number }) {
@@ -785,9 +785,9 @@ function FlowNode({
 }) {
   const ring =
     tone === "agent"
-      ? "node-pulse bg-brand-600 text-white"
+      ? "node-pulse bg-maroon text-white"
       : tone === "human"
-      ? "border-2 border-brand-500 bg-white text-brand-600"
+      ? "border-2 border-maroon bg-white text-maroon"
       : "bg-maroon text-white";
   return (
     <div className="flex w-[58px] flex-col items-center gap-2 sm:w-[72px]">
@@ -796,7 +796,7 @@ function FlowNode({
       </div>
       <span
         className={`text-center text-[9px] uppercase tracking-[0.1em] ${
-          tone === "human" ? "font-semibold text-brand-600" : "text-ink-400"
+          tone === "human" ? "font-semibold text-maroon" : "text-ink-400"
         }`}
       >
         {label}
