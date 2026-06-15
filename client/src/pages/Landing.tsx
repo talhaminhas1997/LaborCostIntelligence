@@ -227,7 +227,7 @@ export default function Landing() {
               Proactive cost intelligence
             </p>
             <h2 className="mx-auto mt-5 max-w-2xl text-3xl font-extrabold leading-[1.02] tracking-[-0.02em] text-maroon sm:text-5xl">
-              Always on. <span className="text-brand-600">On top of your stack.</span>
+              Always on. <span className="text-maroon">On top of your stack.</span>
             </h2>
           </motion.div>
 
@@ -340,7 +340,7 @@ export default function Landing() {
               What the agent does
             </p>
             <h2 className="mt-5 text-3xl font-extrabold leading-[1.02] tracking-[-0.02em] text-maroon sm:text-5xl">
-              See. Act. <span className="text-brand-600">Learn.</span>
+              See. Act. <span className="text-maroon">Learn.</span>
             </h2>
             <p className="mt-4 max-w-2xl text-lg text-ink-500">
               Three objectives, one closing loop — each compounds the others.
@@ -453,7 +453,7 @@ export default function Landing() {
             className="text-3xl font-extrabold leading-[1.04] tracking-[-0.02em] text-maroon sm:text-5xl"
           >
             Protect the margin on every job{" "}
-            <span className="text-brand-600">you&apos;ve won.</span>
+            <span className="text-maroon">you&apos;ve won.</span>
           </motion.h2>
           <motion.p {...fadeUp} className="mx-auto mt-5 max-w-xl text-lg text-ink-500">
             Put an always-on employee on your margin — Margin Agent surfaces the
@@ -620,7 +620,7 @@ function ScopeBand() {
         className="text-center text-2xl font-extrabold tracking-[-0.02em] text-maroon sm:text-4xl"
       >
         Hold more without{" "}
-        <span className="text-brand-600">holding more stress.</span>
+        <span className="text-maroon">holding more stress.</span>
       </motion.h3>
       <div className="mt-12 grid gap-5 sm:grid-cols-2">
         <ScopeCard state="alone" />
