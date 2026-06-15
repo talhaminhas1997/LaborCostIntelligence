@@ -32,7 +32,7 @@ export default function AppPage() {
               active={view === "margin-watch"}
               onClick={() => setView("margin-watch")}
               icon={<ShieldCheck className="h-4 w-4" />}
-              label="Margin Watch"
+              label="Cost Risk Agent"
             />
             <ToggleBtn
               active={view === "bid"}

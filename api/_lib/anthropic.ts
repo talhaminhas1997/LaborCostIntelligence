@@ -1,20 +1,32 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 
 /** Fast model for chat + extraction; stronger model for analysis reasoning. */
 export const FAST_MODEL = "claude-haiku-4-5-20251001";
 export const SMART_MODEL = "claude-sonnet-4-6";
 
+export const hasKey = () => Boolean(process.env.ANTHROPIC_API_KEY);
+
 let client: Anthropic | null = null;
 
-export function getClient(): Anthropic | null {
+/**
+ * Lazily import the SDK at call time (not module load) inside a try/catch.
+ * If the dependency is missing or fails to load in a given environment we
+ * return null and the caller degrades to the deterministic fallback, instead
+ * of the whole serverless function crashing on import (FUNCTION_INVOCATION_FAILED).
+ */
+export async function getClient(): Promise<Anthropic | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  if (!client) {
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (client) return client;
+  try {
+    const mod: any = await import("@anthropic-ai/sdk");
+    const Ctor = mod.default ?? mod;
+    client = new Ctor({ apiKey: process.env.ANTHROPIC_API_KEY });
+    return client;
+  } catch (err) {
+    console.error("[anthropic] SDK load failed:", (err as Error).message);
+    return null;
   }
-  return client;
 }
-
-export const hasKey = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 /** Pull the first balanced JSON object out of arbitrary model text. */
 export function extractJson(text: string): string | null {

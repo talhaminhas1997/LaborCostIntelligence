@@ -494,7 +494,7 @@ function LearningsPanel({
           <>
             {" "}
             — including <span className="font-medium text-brand-600">{resolved} you
-            just protected in Margin Watch</span>
+            just protected by the Cost Risk Agent</span>
           </>
         )}
         .

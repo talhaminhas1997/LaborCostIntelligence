@@ -317,7 +317,7 @@ export default function MarginWatch({
                 placeholder={
                   activeJob
                     ? `Ask about Job ${activeJob.number}…`
-                    : "Ask Margin Watch about your portfolio…"
+                    : "Ask the Cost Risk Agent about your portfolio…"
                 }
                 className="h-11 flex-1 rounded-lg border border-ink-200 bg-white px-4 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
               />

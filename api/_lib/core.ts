@@ -2,6 +2,7 @@ import {
   FAST_MODEL,
   SMART_MODEL,
   getClient,
+  hasKey,
   extractJson,
   num,
   textOf,
@@ -24,8 +25,9 @@ import type {
  * is present and the call succeeds, otherwise a deterministic fallback.
  */
 
-export const apiMode = (): "live" | "fallback" =>
-  getClient() ? "live" : "fallback";
+// Reflects whether a key is configured — never loads the SDK, so /health and
+// the fallback path can never crash on a bad/missing dependency.
+export const apiMode = (): "live" | "fallback" => (hasKey() ? "live" : "fallback");
 
 const coerceStatus = (v: unknown): Status =>
   v === "light" || v === "heavy" || v === "on-target" ? v : "on-target";
@@ -45,7 +47,7 @@ Rules:
 export async function runChat(
   body: ChatRequest
 ): Promise<{ reply: string; source: "model" | "fallback" }> {
-  const client = getClient();
+  const client = await getClient();
   if (!client || !Array.isArray(body.messages)) {
     return { reply: computeChat(body), source: "fallback" };
   }
@@ -87,7 +89,7 @@ Break the scope into realistic phases by work type with estimated hours and a pl
 export async function runExtract(
   body: ExtractRequest
 ): Promise<ExtractResult & { source: "model" | "fallback" }> {
-  const client = getClient();
+  const client = await getClient();
   if (!client) return { ...computeExtract(body), source: "fallback" };
 
   try {
@@ -222,7 +224,7 @@ export async function runAnalyze(body: AnalyzeRequest): Promise<AnalyzeResult> {
       })),
   };
 
-  const client = getClient();
+  const client = await getClient();
   if (!client) return computeAnalyze(request);
 
   try {

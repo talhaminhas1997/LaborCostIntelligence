@@ -21,12 +21,14 @@ export function Wordmark({
       className={`group inline-flex items-center gap-2.5 ${className}`}
     >
       <Logo className="h-7 w-7" />
-      <span className="text-lg font-semibold tracking-tight text-ink-900">
-        Cubit
+      <span className="hidden text-[13px] font-medium leading-tight tracking-tight text-ink-500 sm:inline">
+        Labor cost intelligence
+        <br />
+        <span className="text-ink-400">for construction</span>
       </span>
     </button>
   );
 }
 
 export const DISCLAIMER =
-  "Illustrative figures — production uses live cross-contractor payroll data (v1 single-tenant: your own job history).";
+  "Illustrative — production uses live cross-contractor payroll data (v1 single-tenant: your own job history).";
