@@ -136,13 +136,10 @@ export default function Landing() {
             <a href="#problem" className="hidden transition-colors hover:text-maroon sm:inline">The problem</a>
             <a href="#agent" className="hidden transition-colors hover:text-maroon sm:inline">The agent</a>
             <a href="#how" className="hidden transition-colors hover:text-maroon sm:inline">How it works</a>
-            <button
-              onClick={() => navigate("/app")}
-              className="group inline-flex items-center gap-1.5 font-semibold text-brand-600 transition-colors hover:text-brand-700"
-            >
+            <Button onClick={() => navigate("/app")} size="sm" className="group">
               Try the demo
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-            </button>
+            </Button>
           </nav>
         </div>
       </header>
@@ -178,13 +175,10 @@ export default function Landing() {
             transition={{ duration: 0.5, delay: 0.15 }}
             className="mt-10 flex items-center gap-5"
           >
-            <button
-              onClick={() => navigate("/app")}
-              className="group inline-flex items-center gap-2 text-base font-semibold text-brand-600 transition-colors hover:text-brand-700"
-            >
+            <Button onClick={() => navigate("/app")} size="lg" className="group">
               Try the demo
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </button>
+            </Button>
             <span className="h-4 w-px bg-ink-200" />
             <span className="text-sm text-ink-400">Live demo · no setup.</span>
           </motion.div>
