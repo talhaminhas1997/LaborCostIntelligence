@@ -87,7 +87,7 @@ export function FlagCard({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-sm font-semibold text-ink-900">
+              <span className="text-sm font-semibold text-maroon">
                 Job {job.number}
               </span>
               <span className="text-xs text-ink-400">·</span>

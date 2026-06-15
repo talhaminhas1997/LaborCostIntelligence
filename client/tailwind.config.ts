@@ -50,9 +50,10 @@ const config: Config = {
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.12)",
-        lift: "0 1px 3px rgba(15,23,42,0.06), 0 16px 40px -16px rgba(15,23,42,0.18)",
-        glow: "0 0 0 1px rgba(124,92,255,0.25), 0 12px 32px -10px rgba(124,92,255,0.35)",
+        // Flat, hairline aesthetic — borders carry structure, not drop shadows.
+        soft: "0 1px 2px 0 rgba(38,15,20,0.04)",
+        lift: "0 4px 16px -8px rgba(38,15,20,0.08)",
+        glow: "0 0 0 1px rgba(105,56,239,0.18)",
       },
       keyframes: {
         "fade-up": {

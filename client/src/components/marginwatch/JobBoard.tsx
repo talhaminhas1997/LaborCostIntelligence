@@ -43,7 +43,7 @@ export function JobBoard({
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
             <ShieldCheck className="h-4 w-4" />
           </div>
-          <h3 className="text-sm font-semibold text-ink-900">Job board</h3>
+          <h3 className="text-sm font-semibold text-maroon">Job board</h3>
         </div>
         <div className="mt-2.5 flex items-center gap-3 text-xs">
           <div>
@@ -103,7 +103,7 @@ export function JobBoard({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="flex h-4 w-4 items-center justify-center rounded bg-ink-900 text-[10px] font-semibold text-white">
+                    <span className="flex h-4 w-4 items-center justify-center rounded bg-maroon text-[10px] font-semibold text-white">
                       {job.flag!.rank}
                     </span>
                     <span className="text-xs font-semibold text-ink-800">

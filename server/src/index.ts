@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { apiMode, runChat, runExtract, runAnalyze } from "../../api/_lib/core";
+import { apiMode, runChat } from "../../api/_lib/core";
 
 /**
  * Local development server. In production these routes are served by the
@@ -23,14 +23,6 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   res.json(await runChat(req.body || {}));
-});
-
-app.post("/api/extract", async (req, res) => {
-  res.json(await runExtract(req.body || {}));
-});
-
-app.post("/api/analyze", async (req, res) => {
-  res.json(await runAnalyze(req.body || {}));
 });
 
 app.listen(PORT, () => {

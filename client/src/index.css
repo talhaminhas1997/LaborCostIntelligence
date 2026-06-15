@@ -16,8 +16,8 @@ html {
 
 body {
   margin: 0;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #ffffff;
+  color: #260f14;
 }
 
 .tabular {
@@ -81,40 +81,28 @@ input[type="number"] {
   }
 }
 
-/* Radar sweep + pulse for the Cost Risk Agent command-center band */
-.radar-sweep {
-  background: conic-gradient(
-    from 0deg,
-    rgba(45, 212, 191, 0) 0deg,
-    rgba(45, 212, 191, 0) 270deg,
-    rgba(45, 212, 191, 0.05) 320deg,
-    rgba(45, 212, 191, 0.45) 358deg,
-    rgba(94, 234, 212, 0.65) 360deg
-  );
-  animation: radar-spin 4s linear infinite;
+/* Glowing focal node for the minimal node-and-connector diagrams. */
+.node-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(105, 56, 239, 0.3), transparent 70%);
+  animation: node-pulse 2.6s ease-in-out infinite;
 }
-@keyframes radar-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.radar-ping {
-  animation: radar-ping 3s ease-out infinite;
-}
-@keyframes radar-ping {
-  0% {
-    transform: scale(0.35);
-    opacity: 0.6;
-  }
-  80%,
+@keyframes node-pulse {
+  0%,
   100% {
-    transform: scale(1);
-    opacity: 0;
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.18);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .radar-sweep,
-  .radar-ping {
+  .node-pulse::before {
     animation: none;
   }
 }

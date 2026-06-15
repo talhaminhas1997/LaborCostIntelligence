@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, ArrowRight, LayoutGrid } from "lucide-react";
+import { Send, ArrowRight, LayoutGrid } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/seed";
 import { chat } from "@/lib/api";
 import { cn, usd, usdK, type DistributiveOmit } from "@/lib/utils";
-import type { ChatMessage, Job, Learning } from "@/lib/types";
+import type { ChatMessage, Job } from "@/lib/types";
 
 type Entry =
   | { id: number; kind: "agent"; text: string }
@@ -27,29 +27,7 @@ type Entry =
 const OVERVIEW = "overview";
 const jobById = (id: string) => PORTFOLIO.find((j) => j.id === id);
 
-function buildLearning(job: Job): Learning {
-  const f = job.flag!;
-  return {
-    id: `live-${job.number}`,
-    jobNumber: job.number,
-    jobName: job.name,
-    trade: job.trade,
-    costCode: f.costCode,
-    costCodeName: f.costCodeName,
-    overranPct: f.overPct,
-    kind: f.kind,
-    text: `Just protected Job ${job.number}: ${f.costCodeName} (${f.costCode}) ran ${f.overPct}% over — benchmark tightened from live actuals.`,
-    source: "resolved",
-  };
-}
-
-export default function MarginWatch({
-  onLearn,
-  onOpenBid,
-}: {
-  onLearn: (l: Learning) => void;
-  onOpenBid: () => void;
-}) {
+export default function MarginWatch() {
   const flagged = useMemo(() => flaggedJobs(), []);
   const monitoring = useMemo(() => monitoringJobs(), []);
   const calm = useMemo(() => calmJobs(), []);
@@ -199,7 +177,6 @@ export default function MarginWatch({
   function onResolved(job: Job) {
     setResolved((s) => new Set(s).add(job.id));
     setProtectedAmt((p) => p + job.flag!.marginAtRisk);
-    onLearn(buildLearning(job));
 
     const remaining = flagged.filter(
       (j) => !resolved.has(j.id) && j.id !== job.id
@@ -215,14 +192,14 @@ export default function MarginWatch({
             remaining.length > 0
               ? `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
                   job.number
-                }, and the ${job.flag!.costCodeName} benchmark just got tighter — that feeds your next bid. ${
+                }, and the ${job.flag!.costCodeName} benchmark just got tighter. ${
                   remaining.length
                 } more need you; Job ${remaining[0].number} is next at ${usdK(
                   remaining[0].flag!.marginAtRisk
                 )} at risk.`
               : `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
                   job.number
-                }. That clears every job that needs you today — and each fix sharpened a benchmark, so your next bid in the Co-pilot starts from the truth.`,
+                }. That clears every job that needs you today — the rest are tracking on budget.`,
         },
       ],
     }));
@@ -324,13 +301,6 @@ export default function MarginWatch({
                 <Send className="h-4 w-4" />
               </Button>
             </form>
-            <button
-              onClick={onOpenBid}
-              className="mt-2 flex items-center gap-1 text-[11px] text-ink-400 transition hover:text-brand-600"
-            >
-              <Sparkles className="h-3 w-3" />
-              Closing the loop: each fix sharpens your next bid →
-            </button>
           </div>
         </div>
       </div>
@@ -348,7 +318,7 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
           <LayoutGrid className="h-4 w-4" />
         </div>
         <div>
-          <div className="text-sm font-semibold text-ink-900">Overview</div>
+          <div className="text-sm font-semibold text-maroon">Overview</div>
           <div className="text-[11px] text-ink-500">
             Portfolio briefing · the few jobs that need you
           </div>
@@ -368,7 +338,7 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
     <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white px-4 py-3 sm:px-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-ink-900">
+          <span className="text-sm font-semibold text-maroon">
             Job {job.number}
           </span>
           <span className="truncate text-xs text-ink-500">· {job.name}</span>
