@@ -881,10 +881,10 @@ export function FlagCard({
                 onClick={() => setPhase("review")}
                 className="flex-1"
               >
-                Ask me everything
+                Review each step
               </Button>
               <Button onClick={approveAndRun} className="flex-1">
-                Keep me in the loop
+                Just keep me in the loop
               </Button>
               <Button
                 variant="secondary"
@@ -895,7 +895,7 @@ export function FlagCard({
               </Button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-              <span className="font-medium text-ink-600">Keep me in the loop</span>{" "}
+              <span className="font-medium text-ink-600">Just keep me in the loop</span>{" "}
               runs the plan and pauses only on the calls marked{" "}
               <span className="font-medium text-brand-600">your call</span> — the
               balance between approving every step and letting it run on its own.
