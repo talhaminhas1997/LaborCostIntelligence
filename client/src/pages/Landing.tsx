@@ -18,13 +18,15 @@ const fadeUp = {
 };
 
 /* ---- Section 2 data: inputs → agent → value ----
- * Miter's real-time cost-coded actuals are the LIVE foundation; the SOON inputs
- * are what the agent layers on for a schedule-aware EAC + write-back. */
+ * Almost everything is LIVE because Miter already integrates it (Procore, Sage
+ * 300 CRE, Sage Intacct, Vista, NetSuite, HCSS, etc.). The only genuine SOON is
+ * a dedicated CPM schedule (P6 / Autodesk Build aren't Miter integrations yet)
+ * for a fully schedule-aware EAC. */
 const INPUTS = [
-  { label: "Real-time cost-coded actuals + budget (Miter — live)", live: true },
-  { label: "Schedule / % complete (Procore, P6)", live: false },
-  { label: "Committed costs & change orders (Sage 300 CRE)", live: false },
-  { label: "ERP / GL actuals (Sage 300 CRE, Viewpoint Vista)", live: false },
+  { label: "Real-time cost-coded actuals + budget (Miter)", live: true },
+  { label: "Job costs, cost codes & GL (Sage 300 CRE, Sage Intacct, Vista)", live: true },
+  { label: "Jobs, activities & timesheets (Procore, HCSS)", live: true },
+  { label: "CPM schedule / % complete (Primavera P6, Autodesk Build)", live: false },
 ];
 
 /* Today's value, framed as jobs-to-be-done. */
@@ -102,7 +104,7 @@ const OBJECTIVES: Objective[] = [
     title: "Cost-at-completion forecaster",
     objective: "Know where every job lands.",
     badge: "On Miter's data",
-    body: "Builds on Miter's real-time, cost-coded actual-vs-budget data. Adds what Miter doesn't: a schedule-aware cost-at-completion forecast (EAC) — read against % complete from Procore/P6 — plus autonomous per-cost-code drift detection that runs continuously, with no one opening a dashboard.",
+    body: "Builds on Miter's real-time, cost-coded actuals — already synced from your ERP and Procore. Adds what Miter doesn't: a continuous cost-at-completion forecast (EAC) with autonomous per-cost-code drift detection that runs with no one opening a dashboard — and a fully schedule-aware EAC as you connect a CPM schedule.",
     footer: ["Portfolio roll-up (WIP)", "Margin-protected tally", "Cash-flow forecast"],
   },
   {
@@ -267,8 +269,9 @@ export default function Landing() {
                 ))}
               </ul>
               <p className="mt-5 border-t border-ink-100 pt-4 text-[11px] leading-relaxed text-ink-400">
-                Schedule / % complete sharpens the cost-at-completion forecast —
-                read as a signal, never managed.
+                No new integrations — the agent runs on the stack Miter already
+                connects. A CPM schedule sharpens the forecast; it&apos;s read
+                as a signal, never managed.
               </p>
             </div>
 
@@ -398,6 +401,10 @@ export default function Landing() {
           <motion.div {...fadeUp} className="mt-16">
             <p className="text-center text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
               Built on Miter — not over it
+            </p>
+            <p className="mx-auto mt-3 max-w-xl text-center text-sm text-ink-500">
+              Runs on the integrations Miter already has — Procore, Sage, Vista,
+              and more. No new plumbing.
             </p>
             <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2">
               <div className="bg-ink-50 p-7">
