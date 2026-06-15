@@ -220,7 +220,7 @@ export default function Landing() {
       </section>
 
       {/* 3 — Margin Agent */}
-      <section id="agent" className="border-t border-ink-200 bg-neutral-50">
+      <section id="agent" className="border-t border-ink-200 bg-neutral-100">
         <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <motion.div {...fadeUp} className="text-center">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
@@ -289,7 +289,7 @@ export default function Landing() {
               </div>
 
               {/* TODAY — lit, framed as jobs-to-be-done */}
-              <div className="mt-5 rounded-xl border border-brand-200 bg-neutral-50 p-4">
+              <div className="mt-5 rounded-xl border border-brand-200 bg-neutral-100 p-4">
                 <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
                   <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
                   Today · Ops
@@ -407,7 +407,7 @@ export default function Landing() {
               and more. No new plumbing.
             </p>
             <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2">
-              <div className="bg-neutral-50 p-7">
+              <div className="bg-neutral-100 p-7">
                 <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-400">
                   Miter gives you
                 </div>
@@ -477,7 +477,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-ink-200 bg-neutral-50">
+      <footer className="border-t border-ink-200 bg-neutral-100">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-10 text-sm text-ink-400 sm:flex-row">
           <Wordmark onClick={() => navigate("/")} />
           <p>Prototype · {DISCLAIMER}</p>
