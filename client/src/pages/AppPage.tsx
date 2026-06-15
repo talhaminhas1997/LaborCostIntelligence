@@ -13,8 +13,8 @@ export default function AppPage() {
             <ShieldCheck className="h-4 w-4" />
             Cost Agent
           </div>
-          <div className="hidden w-[120px] justify-end text-right text-xs text-ink-400 sm:flex">
-            Always-on · live
+          <div className="hidden w-[150px] justify-end text-right text-xs text-ink-400 sm:flex">
+            On Miter data · always-on
           </div>
         </div>
       </header>

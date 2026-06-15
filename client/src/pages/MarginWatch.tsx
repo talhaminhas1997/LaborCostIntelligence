@@ -41,7 +41,7 @@ export default function MarginWatch() {
       {
         id: nextId(),
         kind: "agent",
-        text: `Morning. I'm watching ${PORTFOLIO_STATS.jobsMonitored} active jobs. Most are tracking on budget — I only surface the few where margin is genuinely at risk, ranked by dollars at risk and time left to act. ${flagged.length} need you right now. Open one to see the drift and a plan ready to approve.`,
+        text: `Morning. Miter has the real-time cost-coded actuals — I forecast where each of these ${PORTFOLIO_STATS.jobsMonitored} active jobs lands at completion and watch every one for drift, so you don't have to. Most are tracking on budget; I only surface the few where margin is genuinely at risk, ranked by dollars at risk and time left to act. ${flagged.length} need you right now — open one to see the drift and a plan ready to approve.`,
       },
       { id: nextId(), kind: "overview" },
     ],
@@ -76,7 +76,7 @@ export default function MarginWatch() {
         {
           id: nextId(),
           kind: "agent",
-          text: `Job ${job.number} — ${job.name}. Here's the exposure on ${job.flag!.costCode} ${job.flag!.costCodeName}, and a plan ready to protect the margin.`,
+          text: `Job ${job.number} — ${job.name}. Here's where ${job.flag!.costCode} ${job.flag!.costCodeName} lands at completion, the exposure, and a plan ready to protect the margin.`,
         },
         { id: nextId(), kind: "flag", jobId: job.id },
       ];

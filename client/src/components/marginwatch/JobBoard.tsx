@@ -45,6 +45,9 @@ export function JobBoard({
           </div>
           <h3 className="text-sm font-semibold text-maroon">Job board</h3>
         </div>
+        <p className="mt-1 text-[11px] text-ink-400">
+          Cost-at-completion on Miter&apos;s live actuals
+        </p>
         <div className="mt-2.5 flex items-center gap-3 text-xs">
           <div>
             <span className="tabular font-semibold text-brand-600">
