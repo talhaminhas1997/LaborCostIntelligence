@@ -97,6 +97,17 @@ export function FlagCard({
     });
   }
 
+  // Hand off mid-stream: run the current step and the rest autonomously,
+  // taking the recommended call on any remaining decisions.
+  function goAutonomous() {
+    if (refining) return;
+    setPhase("executing");
+    runFrom(reviewIdx, () => {
+      setPhase("done");
+      onResolved(job, actionedDollars());
+    });
+  }
+
   async function approveReviewStep() {
     if (refining) return;
     const idx = reviewIdx;
@@ -441,21 +452,35 @@ export function FlagCard({
 
         {/* Actions / outcome */}
         {phase === "proposed" && (
-          <div className="mt-4 flex items-center gap-2">
-            <Button onClick={approveAll} className="flex-1">
-              Approve all
-            </Button>
-            <Button variant="secondary" onClick={() => setPhase("review")} className="flex-1">
-              Review each
-            </Button>
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <Button onClick={() => setPhase("review")} className="flex-1">
+                Step through
+              </Button>
+              <Button variant="secondary" onClick={approveAll} className="flex-1">
+                Run autonomously
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
+              Step through to make the calls marked{" "}
+              <span className="font-medium text-brand-600">your call</span> — or let
+              Margin Agent run the plan and take the recommended call on each.
+            </p>
           </div>
         )}
 
         {phase === "review" && (
-          <p className="mt-3 text-xs text-ink-500">
-            Reviewing step {reviewIdx + 1} of {flag.plan.length} — make the call
-            where it&apos;s yours, edit any amount, then approve &amp; run.
-          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-ink-500">
+              Step {reviewIdx + 1} of {flag.plan.length} — make the calls that are yours.
+            </p>
+            <button
+              onClick={goAutonomous}
+              className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
+            >
+              Continue autonomously →
+            </button>
+          </div>
         )}
 
         {phase === "executing" && (
