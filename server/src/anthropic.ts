@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 /** Fast model for chat + extraction; stronger model for analysis reasoning. */
-export const FAST_MODEL = "claude-3-5-haiku-latest";
+export const FAST_MODEL = "claude-haiku-4-5-20251001";
 export const SMART_MODEL = "claude-sonnet-4-6";
 
 let client: Anthropic | null = null;
