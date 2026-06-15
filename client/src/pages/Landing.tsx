@@ -17,15 +17,13 @@ const fadeUp = {
   transition: { duration: 0.5 },
 };
 
-/* ---- Section 2 data: inputs → agent → value ---- */
+/* ---- Section 2 data: inputs → agent → value ----
+ * Miter's real-time cost-coded actuals are the LIVE foundation; the SOON inputs
+ * are what the agent layers on for a schedule-aware EAC + write-back. */
 const INPUTS = [
-  { label: "Labor cost & hours, by cost code (Miter)", live: true },
-  {
-    label: "Job budgets & cost codes / SOV (Miter; import from Sage, Foundation)",
-    live: true,
-  },
-  { label: "% complete / progress (Procore, Autodesk Build)", live: false },
-  { label: "Committed costs & change orders (Procore, Sage 300 CRE)", live: false },
+  { label: "Real-time cost-coded actuals + budget (Miter — live)", live: true },
+  { label: "Schedule / % complete (Procore, P6)", live: false },
+  { label: "Committed costs & change orders (Sage 300 CRE)", live: false },
   { label: "ERP / GL actuals (Sage 300 CRE, Viewpoint Vista)", live: false },
 ];
 
@@ -36,13 +34,16 @@ const JTBD = [
   "Does the multi-step fix on your say-so",
 ];
 
-/* The live agent feed — actions tick in, newest on top. */
+/* The live agent feed — actions tick in, newest on top. Every line is something
+ * the agent actually produces in the app (flag, draft, surface, catch,
+ * reforecast), grounded in the seed jobs — drafts/forecasts, never outcomes it
+ * can't achieve without your approval. */
 const FEED = [
-  "Flagged Job 412 — rough-in 23% over, $86.9K at risk",
-  "Drafted change order → +3.1 margin pts",
-  "Surfaced Job 207 margin erosion → alerted PM",
-  "Caught under-billed T&M on Job 132 → $34K recovered",
-  "Reforecast Job 88 cost-to-complete → margin held",
+  "Flagged Job 412 — rough-in 23% over budget, $86.9K at risk",
+  "Drafted change order on Job 412 to capture the out-of-scope rough-in",
+  "Surfaced margin erosion on Job 207 — variance summary ready for the PM",
+  "Caught under-billed T&M on Job 132 — $31K recoverable, billing drafted",
+  "Reforecast Job 88 cost-to-complete at the corrected production rate",
 ];
 
 const VALUE_SOON = [
@@ -322,7 +323,7 @@ export default function Landing() {
                 key={o.n}
                 {...fadeUp}
                 transition={{ duration: 0.45, delay: i * 0.06 }}
-                className="flex flex-col rounded-2xl border border-ink-200 bg-white p-8"
+                className="flex flex-col rounded-2xl border border-ink-200 bg-white p-6 sm:p-8"
               >
                 {/* numbered label */}
                 <div className="font-mono text-xs uppercase tracking-[0.18em] text-ink-400">
@@ -572,7 +573,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
             {isAgent ? "With the agent" : "Alone"}
           </div>
           <div className="text-sm font-semibold text-maroon">
-            {isAgent ? "All 30 jobs watched" : "~5 you can really watch"}
+            {isAgent ? "All 30 jobs watched" : "~5 jobs you can really watch"}
           </div>
         </div>
       </div>
@@ -686,7 +687,7 @@ function CardDiagram({ variant }: { variant: "see" | "act" | "learn" }) {
 /* ---- ACT diagram: the human in the loop — agent proposes, you approve, done ---- */
 function ActDiagram() {
   return (
-    <div className="mt-7 flex h-[84px] items-center justify-center gap-2">
+    <div className="mt-7 flex h-[84px] items-center justify-center gap-1 sm:gap-2">
       <FlowNode tone="agent" label="Agent" icon={<Radar className="h-4 w-4" />} />
       <ArrowRight className="mt-3 h-4 w-4 shrink-0 self-start text-ink-300" />
       <FlowNode tone="human" label="You approve" icon={<HardHat className="h-4 w-4" />} />
@@ -712,7 +713,7 @@ function FlowNode({
       ? "border-2 border-brand-500 bg-white text-brand-600"
       : "bg-maroon text-white";
   return (
-    <div className="flex w-[72px] flex-col items-center gap-2">
+    <div className="flex w-[58px] flex-col items-center gap-2 sm:w-[72px]">
       <div className={`relative flex h-10 w-10 items-center justify-center rounded-full ${ring}`}>
         {icon}
       </div>
@@ -738,7 +739,7 @@ function Stat({
   source: string;
 }) {
   return (
-    <div className="px-6">
+    <div className="px-3 sm:px-6">
       <div className="tabular text-5xl font-extrabold tracking-[-0.03em] text-maroon sm:text-6xl">
         {value}
       </div>
