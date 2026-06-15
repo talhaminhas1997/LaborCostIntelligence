@@ -1,8 +1,8 @@
 {
-  "name": "cost-agent",
+  "name": "margin-agent",
   "version": "1.0.0",
   "private": true,
-  "description": "Cost Agent — the labor cost intelligence layer for construction.",
+  "description": "Margin Agent — the labor cost intelligence layer for construction.",
   "scripts": {
     "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --prefix server run dev",

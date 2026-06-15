@@ -23,7 +23,7 @@ export function Wordmark({
       <Logo className="h-7 w-7" />
       <span className="hidden leading-tight sm:inline">
         <span className="block text-sm font-semibold tracking-tight text-maroon">
-          Cost Agent
+          Margin Agent
         </span>
         <span className="block text-[11px] text-ink-400">
           labor cost intelligence

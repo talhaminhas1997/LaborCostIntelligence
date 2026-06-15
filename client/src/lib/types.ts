@@ -42,7 +42,7 @@ export interface AnalyzeResult {
   source?: "model" | "fallback";
 }
 
-/* ======================================================= Cost Agent
+/* ======================================================= Margin Agent
  * Features 1 & 2 run on a seeded, deterministic portfolio held client-side,
  * so the demo is fully reproducible. The engine (lib/engine.ts) turns raw
  * cost-code actuals into projections, scores them, and decides the few that
@@ -88,6 +88,10 @@ export interface ActionStep {
   artifact: string;
   /** Final step — writing the lesson back into the estimating benchmark (the loop). */
   feedsBenchmark?: boolean;
+  /** Present → this step is a PM decision point (a judgment only the human can
+   *  make), not an autonomous agent action. The agent has already done the work
+   *  to surface it; the PM just picks. `recommended` is the agent's default. */
+  decision?: { question: string; options: string[]; recommended: number };
 }
 
 export interface ScoreParts {

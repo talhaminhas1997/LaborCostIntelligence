@@ -122,49 +122,202 @@ function scoreJob(
 
 function buildPlan(
   kind: FlagKind,
-  job: { number: string },
+  job: { number: string; trade: string; region: string },
   driver: CostCodeProjection
 ): ActionStep[] {
-  const k = KIND[kind];
+  const code = driver.code;
+  const name = driver.name;
+  const overPct = Math.round(driver.overrunPct * 100);
   // The financial action targets the driver cost code's projected overrun — a
   // real figure (overrun hours × blended rate), not an invented "recovered" cut.
   const driverDollars = round(Math.max(0, driver.overrunHours) * driver.rate, 100);
+  const kfmt = (n: number) => `$${Math.round(n / 1000)}K`;
 
+  // Each plan is agent-deterministic on the data, human-gated on judgment: the
+  // agent does the legwork, then surfaces the 1–2 calls only the PM can make.
+
+  if (kind === "added-scope") {
+    return [
+      {
+        id: "trace",
+        label: "Trace the overage",
+        detail: `Plotted ${code} ${name} labor by day — production broke from the as-bid rate ~Wk 6. Pulled the Procore change events over that window.`,
+        targetsDollars: 0,
+        artifact: "ASI-014 + RFI-022 matched to the window",
+      },
+      {
+        id: "d-basis",
+        label: "Confirm the basis",
+        detail: "The overage lines up with ASI-014 (added receptacles, L3) and RFI-022.",
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: "Owner-directed added scope — billable?",
+          options: ["Yes — billable", "Partly", "No — our productivity"],
+          recommended: 0,
+        },
+      },
+      {
+        id: "action",
+        label: `Draft change order · ${code}`,
+        detail: `Bill only the change-tied hours × the billable rate — not the full ${overPct}%. COR assembled with the labor backup and the ASI-014 narrative.`,
+        targetsDollars: driverDollars,
+        artifact: "COR-008 drafted in Procore",
+      },
+      {
+        id: "d-submit",
+        label: "Submit to the GC",
+        detail: "COR-008 is ready to send.",
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: `Submit COR-008 for ${kfmt(driverDollars)} now, or hold?`,
+          options: ["Submit now", "Hold for my review"],
+          recommended: 0,
+        },
+      },
+      {
+        id: "reforecast",
+        label: "Reforecast + update budget",
+        detail: "Rebaselined the EAC with the COR pending (approval-risk haircut), flagged the cash-flow lag, and updated the live budget.",
+        targetsDollars: 0,
+        artifact: "Budget updated · status follow-up set",
+      },
+      {
+        id: "learn",
+        label: "Write back to benchmark",
+        detail: `Fed the true ${name} production rate into the estimating benchmark.`,
+        targetsDollars: 0,
+        artifact: `${name} benchmark tightened`,
+        feedsBenchmark: true,
+      },
+    ];
+  }
+
+  if (kind === "under-recovery") {
+    return [
+      {
+        id: "reconcile",
+        label: "Reconcile billed vs logged",
+        detail: `Matched logged ${name} hours (Miter) against T&M tickets (Procore). Found ${kfmt(driverDollars)} of billable labor not yet ticketed; pulled the daily logs as backup.`,
+        targetsDollars: 0,
+        artifact: `${kfmt(driverDollars)} unbilled labor isolated`,
+      },
+      {
+        id: "d-basis",
+        label: "Confirm the billable basis",
+        detail: `${name} is on T&M under CO-003.`,
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: `Is the ${kfmt(driverDollars)} all billable under CO-003?`,
+          options: ["Yes — all", "Partial", "No"],
+          recommended: 0,
+        },
+      },
+      {
+        id: "d-aging",
+        label: "Late-ticket risk",
+        detail: "Some tickets are >30 days old; the contract requires T&M sign-off within 30.",
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: "How do you want the at-risk tickets played?",
+          options: ["Draft anyway + cover note to GC", "Drop the at-risk ones"],
+          recommended: 0,
+        },
+      },
+      {
+        id: "action",
+        label: `Draft T&M tickets · ${code}`,
+        detail: "Drafted the tickets with daily-log backup and queued them for GC sign-off and billing.",
+        targetsDollars: driverDollars,
+        artifact: `T&M tickets queued for Job ${job.number}`,
+      },
+      {
+        id: "budget",
+        label: "Update budget + close the gap",
+        detail: "Updated the live budget and flagged the ticketing-process gap so it stops recurring.",
+        targetsDollars: 0,
+        artifact: "Budget updated · process flag raised",
+        feedsBenchmark: true,
+      },
+    ];
+  }
+
+  if (kind === "underbid") {
+    return [
+      {
+        id: "check",
+        label: "Check the basis",
+        detail: `No change events on ${code} ${name} in Procore — reads as a bid gap, not added scope. Quantified as-bid vs actual fab rate → EAC.`,
+        targetsDollars: 0,
+        artifact: "Bid gap isolated",
+      },
+      {
+        id: "d-diag",
+        label: "Confirm the diagnosis",
+        detail: `No change events on the ${name}.`,
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: "How do you read it?",
+          options: ["Underbid — we eat it", "Actually added scope", "Field / rework issue"],
+          recommended: 0,
+        },
+      },
+      {
+        id: "protect",
+        label: "Reforecast + protect the rest",
+        detail: "Reforecast at the true fab rate and updated the budget so the remaining cost codes hold. Little to recover on this job — the win is on the next one.",
+        targetsDollars: 0,
+        artifact: "Job EAC + budget updated",
+      },
+      {
+        id: "learn",
+        label: "Fix the next bid",
+        detail: `Wrote the actual ${name} rate back to the estimate (${job.trade} · ${job.region}) so the next bid isn't light.`,
+        targetsDollars: 0,
+        artifact: "Estimating template corrected",
+        feedsBenchmark: true,
+      },
+      {
+        id: "d-claw",
+        label: "Optional — claw back part of it",
+        detail: `The remaining ${name} could be prefabbed or re-sequenced.`,
+        targetsDollars: 0,
+        artifact: "",
+        decision: {
+          question: "Model a prefab / re-sequence scenario?",
+          options: ["Yes, model it", "No"],
+          recommended: 0,
+        },
+      },
+    ];
+  }
+
+  // rework — mostly sunk; no recovery, just carry the allowance + learn.
   return [
     {
-      id: "action",
-      label: `${k.firstStep} · ${driver.code}`,
-      detail:
-        kind === "added-scope"
-          ? `Capture the ${Math.round(driver.overrunPct * 100)}% out-of-scope labor on ${driver.name} as a billable change`
-          : kind === "under-recovery"
-          ? `Bill the unrecovered labor on ${driver.name} at the contract rate`
-          : kind === "underbid"
-          ? `Convert remaining ${driver.name} to T&M against the bid gap`
-          : `Carry an explicit rework allowance on ${driver.name}`,
-      targetsDollars: driverDollars,
-      artifact: k.firstArtifact(job.number),
+      id: "rebaseline",
+      label: `Carry rework allowance · ${code}`,
+      detail: `Quality rework on ${name} is mostly sunk. Carried an explicit allowance and re-baselined the cost-to-complete.`,
+      targetsDollars: 0,
+      artifact: `Rework allowance set on Job ${job.number}`,
     },
     {
       id: "reforecast",
-      label: "Reforecast job margin",
-      detail: `Re-baseline ${driver.code} cost-to-complete at the corrected production rate`,
+      label: "Reforecast + update budget",
+      detail: "Reforecast the job margin at the corrected rate and updated the live budget.",
       targetsDollars: 0,
-      artifact: "Margin reforecast updated",
-    },
-    {
-      id: "budget",
-      label: "Update the live budget",
-      detail: "Post the reforecast to the job's live budget and cost-to-complete",
-      targetsDollars: 0,
-      artifact: "Live budget updated",
+      artifact: "Budget updated",
     },
     {
       id: "learn",
       label: "Write back to benchmark",
-      detail: `Feed ${driver.name} actuals into the estimating benchmark`,
+      detail: `Fed the ${name} rework actuals into the benchmark so it's priced in next time.`,
       targetsDollars: 0,
-      artifact: `${driver.name} benchmark tightened`,
+      artifact: `${name} benchmark tightened`,
       feedsBenchmark: true,
     },
   ];

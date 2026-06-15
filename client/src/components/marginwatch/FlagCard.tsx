@@ -72,9 +72,21 @@ export function FlagCard({
     if (idx >= flag.plan.length) return onAllDone();
     setStep(idx, "running");
     window.setTimeout(() => {
+      // On "approve all", a decision step takes the agent's recommended call.
+      const d = flag.plan[idx].decision;
+      if (d) setConfirms((c) => ({ ...c, [idx]: `→ ${d.options[d.recommended]}` }));
       setStep(idx, "done");
       window.setTimeout(() => runFrom(idx + 1, onAllDone), 300);
     }, 780);
+  }
+
+  /** Review-each: the PM makes a decision-point call → record it and advance. */
+  function chooseDecision(optionText: string) {
+    if (refining) return;
+    const idx = reviewIdx;
+    setConfirms((c) => ({ ...c, [idx]: `→ ${optionText}` }));
+    setStep(idx, "done");
+    advance(idx);
   }
 
   function approveAll() {
@@ -283,17 +295,29 @@ export function FlagCard({
                 >
                   <div className="flex items-start gap-2.5">
                     <div className="mt-0.5">
-                      <StepIcon state={st} idx={i} loop={step.feedsBenchmark} />
+                      <StepIcon
+                        state={st}
+                        idx={i}
+                        loop={step.feedsBenchmark}
+                        decision={!!step.decision}
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={cn(
-                            "text-sm font-medium text-ink-800",
-                            st === "skipped" && "line-through"
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "truncate text-sm font-medium text-ink-800",
+                              st === "skipped" && "line-through"
+                            )}
+                          >
+                            {step.label}
+                          </span>
+                          {step.decision && st === "pending" && (
+                            <span className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">
+                              your call
+                            </span>
                           )}
-                        >
-                          {step.label}
                         </span>
                         {step.targetsDollars > 0 && (
                           <span className="tabular shrink-0 text-xs font-medium text-ink-500">
@@ -322,65 +346,93 @@ export function FlagCard({
                       {st === "running" && (
                         <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-brand-600">
                           {refining && <Loader2 className="h-3 w-3 animate-spin" />}
-                          {refining ? "Cost Agent is revising…" : "Executing…"}
+                          {refining ? "Margin Agent is revising…" : "Executing…"}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {isReviewCurrent && (
-                    <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
-                      {step.targetsDollars > 0 && (
-                        <label className="flex items-center gap-2 text-xs text-ink-500">
-                          Amount
-                          <span className="flex items-center rounded-md border border-ink-200 bg-white px-2">
-                            <span className="text-ink-400">$</span>
-                            <input
-                              type="number"
-                              min={0}
-                              value={amounts[i] ?? Math.round(step.targetsDollars)}
-                              onChange={(e) => {
-                                const v = e.target.value === "" ? 0 : Number(e.target.value);
-                                amountsRef.current[i] = v;
-                                setAmounts((a) => ({ ...a, [i]: v }));
-                              }}
-                              className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
-                            />
-                          </span>
-                        </label>
-                      )}
-                      <input
-                        value={notes[i] || ""}
-                        onChange={(e) =>
-                          setNotes((n) => ({ ...n, [i]: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") approveReviewStep();
-                        }}
-                        placeholder="Adjust this step or tell Cost Agent how (optional)…"
-                        className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" onClick={approveReviewStep} disabled={refining}>
-                          {refining ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
-                            </>
-                          ) : (
-                            "Approve & run"
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={skipReviewStep}
-                          disabled={refining}
-                        >
-                          Skip
-                        </Button>
+                  {isReviewCurrent &&
+                    (step.decision ? (
+                      <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
+                        <p className="text-xs font-medium text-ink-700">
+                          {step.decision.question}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {step.decision.options.map((opt, oi) => (
+                            <button
+                              key={opt}
+                              onClick={() => chooseDecision(opt)}
+                              className={cn(
+                                "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                                oi === step.decision!.recommended
+                                  ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                                  : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                              )}
+                            >
+                              {opt}
+                              {oi === step.decision!.recommended && (
+                                <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
+                                  rec
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
+                        {step.targetsDollars > 0 && (
+                          <label className="flex items-center gap-2 text-xs text-ink-500">
+                            Amount
+                            <span className="flex items-center rounded-md border border-ink-200 bg-white px-2">
+                              <span className="text-ink-400">$</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={amounts[i] ?? Math.round(step.targetsDollars)}
+                                onChange={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  amountsRef.current[i] = v;
+                                  setAmounts((a) => ({ ...a, [i]: v }));
+                                }}
+                                className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
+                              />
+                            </span>
+                          </label>
+                        )}
+                        <input
+                          value={notes[i] || ""}
+                          onChange={(e) =>
+                            setNotes((n) => ({ ...n, [i]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") approveReviewStep();
+                          }}
+                          placeholder="Adjust this step or tell Margin Agent how (optional)…"
+                          className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" onClick={approveReviewStep} disabled={refining}>
+                            {refining ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
+                              </>
+                            ) : (
+                              "Approve & run"
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={skipReviewStep}
+                            disabled={refining}
+                          >
+                            Skip
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               );
             })}
@@ -401,15 +453,15 @@ export function FlagCard({
 
         {phase === "review" && (
           <p className="mt-3 text-xs text-ink-500">
-            Reviewing step {reviewIdx + 1} of {flag.plan.length} — edit the amount,
-            add an instruction, then approve & run, or skip.
+            Reviewing step {reviewIdx + 1} of {flag.plan.length} — make the call
+            where it&apos;s yours, edit any amount, then approve &amp; run.
           </p>
         )}
 
         {phase === "executing" && (
           <div className="mt-4 flex items-center gap-2 text-sm text-brand-600">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Cost Agent is executing the plan…
+            Margin Agent is executing the plan…
           </div>
         )}
 
@@ -455,10 +507,12 @@ function StepIcon({
   state,
   idx,
   loop,
+  decision,
 }: {
   state: StepState;
   idx: number;
   loop?: boolean;
+  decision?: boolean;
 }) {
   if (state === "done")
     return (
@@ -484,7 +538,14 @@ function StepIcon({
       </div>
     );
   return (
-    <div className="flex h-5 w-5 items-center justify-center rounded-full border border-ink-300 text-[10px] font-semibold text-ink-400">
+    <div
+      className={cn(
+        "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
+        decision
+          ? "border-brand-300 text-brand-600"
+          : "border-ink-300 text-ink-400"
+      )}
+    >
       {idx + 1}
     </div>
   );

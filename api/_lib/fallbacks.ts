@@ -2,7 +2,7 @@ import type { ChatRequest } from "./types";
 
 /**
  * Deterministic chat fallback used when no ANTHROPIC_API_KEY is present or the
- * model call fails — so Cost Agent always replies.
+ * model call fails — so Margin Agent always replies.
  */
 export function computeChat(req: ChatRequest): string {
   const last = [...(req.messages || [])].reverse().find((m) => m.role === "user");

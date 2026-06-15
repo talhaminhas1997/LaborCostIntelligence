@@ -11,7 +11,7 @@ export default function AppPage() {
           <Wordmark onClick={() => navigate("/")} />
           <div className="flex items-center gap-2 rounded-lg border border-ink-200 bg-ink-100 px-3.5 py-1.5 text-sm font-medium text-brand-700">
             <ShieldCheck className="h-4 w-4" />
-            Cost Agent
+            Margin Agent
           </div>
           <div className="hidden w-[150px] justify-end text-right text-xs text-ink-400 sm:flex">
             On Miter data · always-on
