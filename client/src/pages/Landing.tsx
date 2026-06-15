@@ -470,8 +470,8 @@ export default function Landing() {
               protects.
             </p>
             <p className="mt-1.5 text-sm text-ink-400">
-              About a dollar a day per job. A year per job costs a fraction of
-              the margin saved on a single at-risk job.
+              About fifty cents a day per job. A year per job costs a fraction
+              of the margin saved on a single at-risk job.
             </p>
           </motion.div>
         </div>
