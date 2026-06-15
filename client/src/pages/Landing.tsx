@@ -123,17 +123,17 @@ export default function Landing() {
             transition={{ duration: 0.5, delay: 0.05 }}
             className="mt-8 max-w-5xl text-[2.6rem] font-extrabold leading-[0.98] tracking-[-0.03em] text-maroon sm:text-7xl"
           >
-            Stop margin from leaking on{" "}
-            <span className="text-brand-600">jobs you&apos;ve already won.</span>
+            Stop sweating your margins.{" "}
+            <span className="text-brand-600">Start running more jobs.</span>
           </motion.h1>
           <motion.p
             {...fadeUp}
             transition={{ duration: 0.5, delay: 0.1 }}
             className="mt-8 max-w-2xl text-lg leading-relaxed text-ink-500"
           >
-            For ops: the Cost Risk Agent watches every job&apos;s labor cost in
-            real time, surfaces only what&apos;s at risk, and runs the fix to
-            done — on your approval.
+            Your proactive cost agent watches labor cost on every job, surfaces
+            only what needs your judgment, and — on your approval — handles the
+            fix before the margin&apos;s gone.
           </motion.p>
           <motion.div
             {...fadeUp}
