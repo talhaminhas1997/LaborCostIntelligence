@@ -281,12 +281,59 @@ export default function MarginWatch() {
   }
 
   const activeJob = activeId === OVERVIEW ? null : jobById(activeId) ?? null;
-  const chips =
-    activeJob?.status === "flagged"
-      ? ["Why is it drifting?", "Walk me through the plan", "Is it recoverable?"]
-      : activeJob
-      ? ["Why isn't this flagged?", "What would change that?"]
-      : ["Which job is worst?", "Summarize my exposure"];
+
+  /** Next-step suggestions that adapt to the conversation — the agent drops
+   *  what's been covered and proposes the next thing worth asking. */
+  function suggestChips(): string[] {
+    const askedTexts = entries
+      .filter((e) => e.kind === "user")
+      .map((e) => (e as any).text.toLowerCase());
+    const asked = (re: RegExp) => askedTexts.some((t) => re.test(t));
+    const fromPool = (
+      pool: { chip: string; re: RegExp }[],
+      forward: string[]
+    ) => {
+      const left = pool.filter((p) => !asked(p.re)).map((p) => p.chip);
+      return (left.length >= 2 ? left : [...left, ...forward]).slice(0, 3);
+    };
+
+    // A flagged job already resolved → propose moving on.
+    if (activeJob?.flag && resolved.has(activeJob.id)) {
+      return [
+        "What's the next-worst job?",
+        "How much have I protected?",
+        "What's drifting but not flagged?",
+      ];
+    }
+
+    if (activeJob?.flag) {
+      return fromPool(
+        [
+          { chip: "Why is it drifting?", re: /why.*(drift|over|driv)|what.*driv/ },
+          { chip: "Is it recoverable?", re: /recover|claw|billable|salvage/ },
+          { chip: "Walk me through the plan", re: /walk.*through|the plan|steps?\b/ },
+          { chip: "How confident are you?", re: /confiden|how.*sure|how.*know|trust/ },
+        ],
+        ["What if the scope isn't billable?", "What's the next-worst job?"]
+      );
+    }
+
+    if (activeJob) {
+      return ["Why isn't this flagged?", "What would change that?", "Which job is worst?"];
+    }
+
+    // Overview
+    return fromPool(
+      [
+        { chip: "Which job is worst?", re: /worst|which job|biggest|top |priorit/ },
+        { chip: "Summarize my exposure", re: /exposure|summar|portfolio|across|overall|total/ },
+        { chip: "Why are these flagged?", re: /why.*(flag|these)|surfac|criteria|how.*decide/ },
+        { chip: "What's drifting but not flagged?", re: /watch|below.*threshold|not flagged|monitor/ },
+      ],
+      ["Which should I tackle first?"]
+    );
+  }
+  const chips = suggestChips();
 
   return (
     <div className="grid h-[calc(100vh-3.5rem)] grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -443,7 +490,7 @@ function ThreadHeader({
   const tone =
     job.status === "flagged"
       ? resolved
-        ? { chip: "bg-emerald-100 text-emerald-700", label: "Risk mitigated" }
+        ? { chip: "bg-emerald-100 text-emerald-700", label: "Handled" }
         : { chip: "bg-rose-100 text-rose-700", label: "Needs you" }
       : job.status === "monitoring"
       ? { chip: "bg-amber-100 text-amber-700", label: "Watching" }
@@ -553,7 +600,7 @@ function PortfolioRollup({
       <div className="mt-3 grid grid-cols-3 gap-3">
         <RollStat label="Contract value" value={`$${(totalContract / 1e6).toFixed(1)}M`} />
         <RollStat label="Surfaced at risk" value={usdK(surfacedAtRisk)} tone="danger" />
-        <RollStat label="Risk actioned" value={usd(mitigated)} tone="brand" />
+        <RollStat label="Acted on" value={usd(mitigated)} tone="brand" />
       </div>
       <div className="mt-3.5">
         <div className="flex h-2 overflow-hidden rounded-full bg-ink-100">
@@ -576,6 +623,7 @@ function PortfolioRollup({
 /* ------------------------------------------------------------ bubbles */
 
 function AgentBubble({ text }: { text: string }) {
+  text = text ?? "";
   const cut = text.indexOf(DISCLAIMER_SENTINEL);
   const body = cut >= 0 ? text.slice(0, cut).trimEnd() : text;
   const disclaimer =

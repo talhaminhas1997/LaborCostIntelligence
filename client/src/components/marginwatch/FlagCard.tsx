@@ -15,6 +15,10 @@ import {
   ChevronDown,
   Mail,
   Copy,
+  Eye,
+  PenLine,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chat } from "@/lib/api";
@@ -48,6 +52,16 @@ export function FlagCard({
   const [amounts, setAmounts] = useState<Record<number, number>>({});
   const [confirms, setConfirms] = useState<Record<number, string>>({});
   const [refining, setRefining] = useState(false);
+  // Step-through edit: the revised step the agent will now take, previewed
+  // before it commits (the "show me what it'll do" path).
+  const [previews, setPreviews] = useState<Record<number, string>>({});
+  // Per-step conversation — the PM can open any step and ask about it.
+  const [chatOpen, setChatOpen] = useState<number | null>(null);
+  const [stepMsgs, setStepMsgs] = useState<
+    Record<number, { role: "user" | "assistant"; content: string }[]>
+  >({});
+  const [chatDraft, setChatDraft] = useState<Record<number, string>>({});
+  const [chatBusy, setChatBusy] = useState<number | null>(null);
   // Drafts the agent can't send (emails / docs to a third party) — expanded for
   // the PM to copy and send themselves.
   const [openDrafts, setOpenDrafts] = useState<Record<number, boolean>>({});
@@ -142,9 +156,8 @@ export function FlagCard({
     runAuto(idx);
   }
 
-  async function approveReviewStep() {
-    if (refining) return;
-    const idx = reviewIdx;
+  // Has the PM changed anything about this step (amount or instruction)?
+  const isEdited = (idx: number) => {
     const step = flag.plan[idx];
     const note = (notes[idx] || "").trim();
     const editedAmt = amounts[idx];
@@ -152,17 +165,110 @@ export function FlagCard({
       step.targetsDollars > 0 &&
       editedAmt != null &&
       Math.round(editedAmt) !== Math.round(step.targetsDollars);
+    return !!note || amountChanged;
+  };
 
+  // Ask the agent what the step becomes given the PM's edits → one-line confirm.
+  async function reviseStep(idx: number): Promise<string> {
+    const step = flag.plan[idx];
+    const note = (notes[idx] || "").trim();
+    const editedAmt = amounts[idx];
+    const amountChanged =
+      step.targetsDollars > 0 &&
+      editedAmt != null &&
+      Math.round(editedAmt) !== Math.round(step.targetsDollars);
+    if (!note && !amountChanged) return step.artifact;
+    try {
+      const instruction = `On Job ${job.number} (${flag.costCode} ${flag.costCodeName}), I'm reviewing the action step "${step.label}".${
+        amountChanged ? ` Change the amount to ${usd(editedAmt!)}.` : ""
+      }${note ? ` Instruction: ${note}.` : ""} Confirm in one short sentence exactly what you'll do for this step.`;
+      const { reply } = await chat([{ role: "user", content: instruction }], {
+        mode: "margin-watch",
+        jobContext: {
+          jobName: job.name,
+          jobNumber: job.number,
+          costCode: `${flag.costCode} ${flag.costCodeName}`,
+          step: step.label,
+        },
+      });
+      return reply?.trim() || step.artifact;
+    } catch {
+      return `${amountChanged ? `Revised to ${usd(editedAmt!)}. ` : ""}${
+        note ? `Noted: ${note}` : step.artifact
+      }`;
+    }
+  }
+
+  /** Show the PM the revised step before it runs (the third option on an edit). */
+  async function previewRevision() {
+    if (refining) return;
+    const idx = reviewIdx;
+    setRefining(true);
+    const text = await reviseStep(idx);
+    setRefining(false);
+    setPreviews((p) => ({ ...p, [idx]: text }));
+  }
+
+  const clearPreview = () =>
+    setPreviews((p) => {
+      const next = { ...p };
+      delete next[reviewIdx];
+      return next;
+    });
+
+  /** Commit a step that's already been previewed — no second round-trip. */
+  function runPreviewed() {
+    const idx = reviewIdx;
     setStep(idx, "running");
-    let confirmation = step.artifact;
+    window.setTimeout(() => {
+      setConfirms((c) => ({ ...c, [idx]: previews[idx] }));
+      setStep(idx, "done");
+      advance(idx);
+    }, 480);
+  }
 
-    if (note || amountChanged) {
+  async function approveReviewStep() {
+    if (refining) return;
+    const idx = reviewIdx;
+    setStep(idx, "running");
+    let confirmation = flag.plan[idx].artifact;
+    if (isEdited(idx)) {
       setRefining(true);
-      try {
-        const instruction = `On Job ${job.number} (${flag.costCode} ${flag.costCodeName}), I'm reviewing the action step "${step.label}".${
-          amountChanged ? ` Change the amount to ${usd(editedAmt!)}.` : ""
-        }${note ? ` Instruction: ${note}.` : ""} Confirm in one short sentence exactly what you'll do for this step.`;
-        const { reply } = await chat([{ role: "user", content: instruction }], {
+      confirmation = await reviseStep(idx);
+      setRefining(false);
+    } else {
+      await sleep(600);
+    }
+    setConfirms((c) => ({ ...c, [idx]: confirmation }));
+    setStep(idx, "done");
+    advance(idx);
+  }
+
+  /** Open / ask a question about a single step (the double-click drill-in). */
+  function toggleChat(idx: number) {
+    setChatOpen((cur) => (cur === idx ? null : idx));
+  }
+
+  async function sendStepChat(idx: number) {
+    const text = (chatDraft[idx] || "").trim();
+    if (!text || chatBusy !== null) return;
+    const step = flag.plan[idx];
+    const history = stepMsgs[idx] || [];
+    const next = [...history, { role: "user" as const, content: text }];
+    setStepMsgs((m) => ({ ...m, [idx]: next }));
+    setChatDraft((d) => ({ ...d, [idx]: "" }));
+    setChatBusy(idx);
+    try {
+      const { reply } = await chat(
+        [
+          {
+            role: "user",
+            content: `I'm looking at the plan step "${step.label}" — ${step.detail}${
+              step.targetsDollars > 0 ? ` (targets ${usd(step.targetsDollars)})` : ""
+            }. ${text}`,
+          },
+        ],
+        {
           mode: "margin-watch",
           jobContext: {
             jobName: job.name,
@@ -170,22 +276,29 @@ export function FlagCard({
             costCode: `${flag.costCode} ${flag.costCodeName}`,
             step: step.label,
           },
-        });
-        confirmation = reply?.trim() || confirmation;
-      } catch {
-        confirmation = `${amountChanged ? `Revised to ${usd(editedAmt!)}. ` : ""}${
-          note ? `Noted: ${note}` : confirmation
-        }`;
-      } finally {
-        setRefining(false);
-      }
-    } else {
-      await sleep(600);
+        }
+      );
+      setStepMsgs((m) => ({
+        ...m,
+        [idx]: [
+          ...next,
+          { role: "assistant", content: reply?.trim() || "—" },
+        ],
+      }));
+    } catch {
+      setStepMsgs((m) => ({
+        ...m,
+        [idx]: [
+          ...next,
+          {
+            role: "assistant",
+            content: "I lost the connection for a second — try that again.",
+          },
+        ],
+      }));
+    } finally {
+      setChatBusy(null);
     }
-
-    setConfirms((c) => ({ ...c, [idx]: confirmation }));
-    setStep(idx, "done");
-    advance(idx);
   }
 
   function copyDraft(idx: number, d: NonNullable<ActionStep["draft"]>) {
@@ -358,7 +471,11 @@ export function FlagCard({
                         decision={!!step.decision}
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div
+                      className="min-w-0 flex-1"
+                      onDoubleClick={() => toggleChat(i)}
+                      title="Double-click to ask about this step"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <span
@@ -382,6 +499,15 @@ export function FlagCard({
                         )}
                       </div>
                       <div className="text-xs text-ink-500">{step.detail}</div>
+
+                      {/* Systems this step touches — read vs write, for confidence */}
+                      {step.systems && step.systems.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                          {step.systems.map((s, si) => (
+                            <SystemChip key={si} system={s} />
+                          ))}
+                        </div>
+                      )}
                       {(st === "done" || st === "skipped") && (
                         <div
                           className={cn(
@@ -465,8 +591,84 @@ export function FlagCard({
                           )}
                         </div>
                       )}
+
+                      {/* Drill-in: open a short conversation about this step */}
+                      {st !== "skipped" && (
+                        <button
+                          onClick={() => toggleChat(i)}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-400 transition-colors hover:text-brand-600"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          {chatOpen === i ? "Hide" : "Ask about this step"}
+                          {stepMsgs[i]?.length ? (
+                            <span className="text-ink-400">
+                              · {stepMsgs[i].filter((m) => m.role === "user").length}
+                            </span>
+                          ) : null}
+                        </button>
+                      )}
                     </div>
                   </div>
+
+                  {chatOpen === i && (
+                    <div className="mt-2.5 rounded-lg border border-ink-200 bg-ink-50/60 p-2.5">
+                      {stepMsgs[i]?.length ? (
+                        <div className="mb-2 space-y-2">
+                          {stepMsgs[i].map((m, mi) => (
+                            <div
+                              key={mi}
+                              className={cn(
+                                "flex",
+                                m.role === "user" ? "justify-end" : "justify-start"
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
+                                  m.role === "user"
+                                    ? "bg-brand-500 text-white"
+                                    : "border border-ink-200 bg-white text-ink-700"
+                                )}
+                              >
+                                {m.content}
+                              </div>
+                            </div>
+                          ))}
+                          {chatBusy === i && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-ink-400">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Margin Agent
+                              is thinking…
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mb-2 text-[11px] text-ink-400">
+                          Ask why this step, the amount, what the systems do, or what
+                          happens if it&apos;s rejected.
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={chatDraft[i] || ""}
+                          onChange={(e) =>
+                            setChatDraft((d) => ({ ...d, [i]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") sendStepChat(i);
+                          }}
+                          placeholder="Ask about this step…"
+                          className="h-8 flex-1 rounded-md border border-ink-200 bg-white px-2.5 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                        />
+                        <button
+                          onClick={() => sendStepChat(i)}
+                          disabled={chatBusy === i || !(chatDraft[i] || "").trim()}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {showDecide && (
                     <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
@@ -506,57 +708,118 @@ export function FlagCard({
                   )}
 
                   {isReviewCurrent && !step.decision && (
-                      <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
-                        {step.targetsDollars > 0 && (
-                          <label className="flex items-center gap-2 text-xs text-ink-500">
-                            Amount
-                            <span className="flex items-center rounded-md border border-ink-200 bg-white px-2">
-                              <span className="text-ink-400">$</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={amounts[i] ?? Math.round(step.targetsDollars)}
-                                onChange={(e) => {
-                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
-                                  amountsRef.current[i] = v;
-                                  setAmounts((a) => ({ ...a, [i]: v }));
-                                }}
-                                className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
-                              />
-                            </span>
-                          </label>
-                        )}
-                        <input
-                          value={notes[i] || ""}
-                          onChange={(e) =>
-                            setNotes((n) => ({ ...n, [i]: e.target.value }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") approveReviewStep();
-                          }}
-                          placeholder="Adjust this step or tell Margin Agent how (optional)…"
-                          className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" onClick={approveReviewStep} disabled={refining}>
-                            {refining ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
-                              </>
-                            ) : (
-                              "Approve & run"
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={skipReviewStep}
-                            disabled={refining}
-                          >
-                            Skip
-                          </Button>
+                    <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
+                      {previews[i] != null ? (
+                        // The revised step the agent will now take — confirm or keep editing.
+                        <div className="space-y-2.5">
+                          <div className="rounded-lg border border-brand-200 bg-brand-50/70 p-2.5">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+                              <PenLine className="h-3 w-3" /> Revised step — what it&apos;ll
+                              now do
+                            </div>
+                            <p className="text-xs leading-relaxed text-ink-700">
+                              {previews[i]}
+                            </p>
+                            {amounts[i] != null &&
+                              Math.round(amounts[i]) !==
+                                Math.round(step.targetsDollars) && (
+                                <p className="tabular mt-1 text-[11px] text-ink-500">
+                                  Amount: {usd(Math.round(amounts[i]))}{" "}
+                                  <span className="text-ink-400">
+                                    (was {usd(Math.round(step.targetsDollars))})
+                                  </span>
+                                </p>
+                              )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" onClick={runPreviewed}>
+                              Run this step
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={clearPreview}
+                            >
+                              Keep editing
+                            </Button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <>
+                          {step.targetsDollars > 0 && (
+                            <label className="flex items-center gap-2 text-xs text-ink-500">
+                              Amount
+                              <span className="flex items-center rounded-md border border-ink-200 bg-white px-2">
+                                <span className="text-ink-400">$</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={amounts[i] ?? Math.round(step.targetsDollars)}
+                                  onChange={(e) => {
+                                    const v =
+                                      e.target.value === ""
+                                        ? 0
+                                        : Number(e.target.value);
+                                    amountsRef.current[i] = v;
+                                    setAmounts((a) => ({ ...a, [i]: v }));
+                                  }}
+                                  className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
+                                />
+                              </span>
+                            </label>
+                          )}
+                          <input
+                            value={notes[i] || ""}
+                            onChange={(e) =>
+                              setNotes((n) => ({ ...n, [i]: e.target.value }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") approveReviewStep();
+                            }}
+                            placeholder="Adjust this step or tell Margin Agent how (optional)…"
+                            className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" onClick={approveReviewStep} disabled={refining}>
+                              {refining && previews[i] == null ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Working…
+                                </>
+                              ) : (
+                                "Approve & run"
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={previewRevision}
+                              disabled={refining || !isEdited(i)}
+                              title={
+                                isEdited(i)
+                                  ? "See the revised step before it runs"
+                                  : "Edit the amount or add an instruction first"
+                              }
+                            >
+                              {refining ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
+                                </>
+                              ) : (
+                                "Preview revision"
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={skipReviewStep}
+                              disabled={refining}
+                            >
+                              Skip
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -631,7 +894,7 @@ export function FlagCard({
               </div>
               <div>
                 <div className="text-sm font-semibold text-emerald-800">
-                  Risk mitigated on Job {job.number}
+                  Handled — Job {job.number}
                 </div>
                 <div className="text-xs text-emerald-600">
                   {actionRan && `${actionVerb} for ${usd(actionAmt)} · `}
@@ -708,6 +971,32 @@ function StepIcon({
     >
       {idx + 1}
     </div>
+  );
+}
+
+/** A system this step touches — read (pulls data) vs write (changes a record). */
+function SystemChip({
+  system,
+}: {
+  system: { name: string; mode: "read" | "write"; note?: string };
+}) {
+  const write = system.mode === "write";
+  return (
+    <span
+      title={`${write ? "Writes to" : "Reads from"} ${system.name}${
+        system.note ? ` — ${system.note}` : ""
+      }`}
+      className={cn(
+        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]",
+        write
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-ink-200 bg-ink-50 text-ink-500"
+      )}
+    >
+      {write ? <PenLine className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
+      <span className="font-medium">{system.name}</span>
+      {system.note && <span className="text-ink-400">· {system.note}</span>}
+    </span>
   );
 }
 

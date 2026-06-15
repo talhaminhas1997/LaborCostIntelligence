@@ -67,7 +67,7 @@ export function JobBoard({
             <span className="tabular font-semibold text-brand-600">
               {usd(protectedAmt)}
             </span>
-            <span className="text-ink-400"> risk mitigated</span>
+            <span className="text-ink-400"> acted on</span>
           </div>
           <span className="h-3 w-px bg-ink-200" />
           <div>
@@ -117,7 +117,7 @@ export function JobBoard({
             </div>
           ) : (
             <p className="px-2 text-xs font-medium text-emerald-600">
-              ✓ All clear — every flagged job mitigated.
+              ✓ All clear — every flagged job handled.
             </p>
           )}
         </Section>
@@ -322,7 +322,7 @@ function ChatRow({
       </span>
       {resolved && (
         <span className="ml-auto shrink-0 text-[10px] font-medium text-emerald-600">
-          ✓ mitigated
+          ✓ handled
         </span>
       )}
     </button>
