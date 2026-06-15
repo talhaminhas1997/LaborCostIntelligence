@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -10,11 +10,14 @@ import {
   RefreshCw,
   Database,
   X,
+  Clock,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chat } from "@/lib/api";
-import { cn, usd, usdK } from "@/lib/utils";
-import type { Job } from "@/lib/types";
+import { cn, fmt, usd, usdK } from "@/lib/utils";
+import type { CostCodeProjection, Job } from "@/lib/types";
 
 type StepState = "pending" | "running" | "done" | "skipped";
 
@@ -28,19 +31,32 @@ export function FlagCard({
   onResolved,
 }: {
   job: Job;
-  onResolved: (job: Job) => void;
+  onResolved: (job: Job, actionedDollars: number) => void;
 }) {
   const flag = job.flag!;
+  const actionIdx = flag.plan.findIndex((p) => p.targetsDollars > 0);
   const [phase, setPhase] = useState<"proposed" | "review" | "executing" | "done">(
     "proposed"
   );
   const [steps, setSteps] = useState<StepState[]>(flag.plan.map(() => "pending"));
   const [reviewIdx, setReviewIdx] = useState(0);
+  const [showCodes, setShowCodes] = useState(false);
   // Per-step review inputs and agent confirmations (Review-each path).
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [amounts, setAmounts] = useState<Record<number, number>>({});
   const [confirms, setConfirms] = useState<Record<number, string>>({});
   const [refining, setRefining] = useState(false);
+  // Refs mirror amounts/skips so the actioned $ can be read synchronously at finish.
+  const amountsRef = useRef<Record<number, number>>({});
+  const skippedRef = useRef<Set<number>>(new Set());
+
+  // $ actually committed by the financial action (edited, or 0 if skipped).
+  const actionedDollars = () => {
+    if (actionIdx < 0 || skippedRef.current.has(actionIdx)) return 0;
+    return Math.round(
+      amountsRef.current[actionIdx] ?? flag.plan[actionIdx].targetsDollars
+    );
+  };
 
   const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
   const setStep = (idx: number, v: StepState) =>
@@ -48,7 +64,7 @@ export function FlagCard({
   const advance = (idx: number) => {
     if (idx + 1 >= flag.plan.length) {
       setPhase("done");
-      onResolved(job);
+      onResolved(job, actionedDollars());
     } else setReviewIdx(idx + 1);
   };
 
@@ -65,7 +81,7 @@ export function FlagCard({
     setPhase("executing");
     runFrom(0, () => {
       setPhase("done");
-      onResolved(job);
+      onResolved(job, actionedDollars());
     });
   }
 
@@ -118,6 +134,7 @@ export function FlagCard({
   function skipReviewStep() {
     if (refining) return;
     const idx = reviewIdx;
+    skippedRef.current.add(idx);
     setConfirms((c) => ({ ...c, [idx]: "Skipped — not run." }));
     setStep(idx, "skipped");
     advance(idx);
@@ -126,7 +143,6 @@ export function FlagCard({
   const atStakePts = (flag.marginNow - flag.marginAtCompletion).toFixed(1);
 
   // Outcome summary (reflects per-step edits/skips from the Review-each path).
-  const actionIdx = flag.plan.findIndex((p) => p.targetsDollars > 0);
   const ranCount = steps.filter((s) => s === "done").length;
   const skippedCount = steps.filter((s) => s === "skipped").length;
   const actionRan = actionIdx >= 0 && steps[actionIdx] === "done";
@@ -179,6 +195,15 @@ export function FlagCard({
       <div className="px-4 py-3.5">
         <p className="text-sm font-medium text-ink-800">{flag.summary}</p>
 
+        {/* Temporal — caught early, trending up */}
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-500">
+          <Clock className="h-3 w-3 shrink-0 text-rose-400" />
+          <span>
+            First flagged <span className="font-medium text-ink-600">{flag.detectedWeeksAgo} weeks ago</span> · drift widening
+          </span>
+          <Sparkline data={flag.trend} />
+        </div>
+
         {/* Metrics */}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label="Over budget" value={`${flag.overPct}%`} tone="danger" />
@@ -207,6 +232,22 @@ export function FlagCard({
             </span>
           </div>
         </div>
+
+        {/* Cost-code drill-down — the forecast at the cost-code level */}
+        <button
+          onClick={() => setShowCodes((s) => !s)}
+          className="mt-3 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+        >
+          {showCodes ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+          Cost-code breakdown · {job.costLines.length} codes
+        </button>
+        {showCodes && (
+          <CostCodeTable lines={job.costLines} driverCode={flag.costCode} />
+        )}
 
         {/* Plan */}
         <div className="mt-3.5">
@@ -298,12 +339,11 @@ export function FlagCard({
                               type="number"
                               min={0}
                               value={amounts[i] ?? Math.round(step.targetsDollars)}
-                              onChange={(e) =>
-                                setAmounts((a) => ({
-                                  ...a,
-                                  [i]: e.target.value === "" ? 0 : Number(e.target.value),
-                                }))
-                              }
+                              onChange={(e) => {
+                                const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                amountsRef.current[i] = v;
+                                setAmounts((a) => ({ ...a, [i]: v }));
+                              }}
                               className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
                             />
                           </span>
@@ -477,6 +517,87 @@ function Metric({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+/** Tiny overrun-trajectory sparkline (oldest → current). */
+function Sparkline({ data }: { data: number[] }) {
+  const w = 52;
+  const h = 14;
+  const max = Math.max(...data, 1);
+  const pts = data
+    .map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * (h - 2) - 1}`)
+    .join(" ");
+  const lastY = h - (data[data.length - 1] / max) * (h - 2) - 1;
+  return (
+    <svg width={w} height={h} className="shrink-0 overflow-visible">
+      <polyline points={pts} fill="none" stroke="#e11d48" strokeWidth="1.5" />
+      <circle cx={w} cy={lastY} r="1.8" fill="#e11d48" />
+    </svg>
+  );
+}
+
+/** Cost-code breakdown — the forecast at the cost-code level (the #1 foundation). */
+function CostCodeTable({
+  lines,
+  driverCode,
+}: {
+  lines: CostCodeProjection[];
+  driverCode: string;
+}) {
+  return (
+    <div className="mt-2 overflow-x-auto rounded-lg border border-ink-200">
+      <table className="w-full min-w-[26rem] text-left text-[11px]">
+        <thead className="bg-ink-50 text-ink-400">
+          <tr>
+            <th className="px-2 py-1 font-medium">Cost code</th>
+            <th className="px-2 py-1 text-right font-medium">Budget</th>
+            <th className="px-2 py-1 text-right font-medium">Actual</th>
+            <th className="px-2 py-1 text-right font-medium">Proj.</th>
+            <th className="px-2 py-1 text-right font-medium">Over</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((c) => {
+            const isDriver = c.code === driverCode;
+            const overPct = Math.round(c.overrunPct * 100);
+            const overDollars = Math.round(Math.max(0, c.overrunHours) * c.rate);
+            return (
+              <tr
+                key={c.code}
+                className={cn(
+                  "border-t border-ink-100",
+                  isDriver && "bg-rose-50/60"
+                )}
+              >
+                <td className="px-2 py-1.5">
+                  <span className="font-mono text-ink-400">{c.code}</span>{" "}
+                  <span className="text-ink-700">{c.name}</span>
+                </td>
+                <td className="tabular px-2 py-1.5 text-right text-ink-500">
+                  {fmt(c.budgetHours)}h
+                </td>
+                <td className="tabular px-2 py-1.5 text-right text-ink-600">
+                  {fmt(c.actualHours)}h
+                  <span className="text-ink-400"> · {Math.round(c.pctComplete * 100)}%</span>
+                </td>
+                <td className="tabular px-2 py-1.5 text-right font-medium text-ink-700">
+                  {fmt(c.projectedHours)}h
+                </td>
+                <td
+                  className={cn(
+                    "tabular px-2 py-1.5 text-right font-semibold",
+                    c.drifting ? "text-rose-600" : "text-emerald-600"
+                  )}
+                >
+                  {c.drifting ? `+${overPct}% · ${usdK(overDollars)}` : "on budget"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

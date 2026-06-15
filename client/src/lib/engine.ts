@@ -251,13 +251,18 @@ function buildJob(seed: JobSeed): { job: Job; learning?: Learning } {
   const plan = buildPlan(kind, seed, driver);
   const driverAtRisk = Math.round(Math.max(0, driver.overrunHours) * driver.rate);
 
+  // Temporal: when the drift first crossed the noise floor, and its trajectory.
+  const overPct = Math.round(driver.overrunPct * 100);
+  const detectedWeeksAgo = Math.max(2, Math.round(sp.weeksLeftToAct * 0.4));
+  const trend = [0.32, 0.5, 0.68, 0.84, 1].map((f) => Math.round(overPct * f));
+
   const flag: JobFlag = {
     ...sp,
     kind,
     rank: 0, // assigned after the whole portfolio is scored
     costCode: driver.code,
     costCodeName: driver.name,
-    overPct: Math.round(driver.overrunPct * 100),
+    overPct,
     driverAtRisk,
     recoverability: KIND[kind].recoverability,
     driverLabel: KIND[kind].label,
@@ -265,6 +270,8 @@ function buildJob(seed: JobSeed): { job: Job; learning?: Learning } {
     why: whyFor(kind, seed, driver, sp, driverAtRisk),
     marginNow: seed.baselineMarginPct,
     marginAtCompletion: projectedMarginPct,
+    detectedWeeksAgo,
+    trend,
     plan,
   };
 

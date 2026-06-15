@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, ArrowRight, LayoutGrid } from "lucide-react";
+import { Send, ArrowRight, LayoutGrid, BarChart3 } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -133,6 +133,15 @@ export default function MarginWatch() {
       overPct: f.overPct,
       kind: f.kind,
       marginImpact: `${f.marginNow}% → ${f.marginAtCompletion}% at completion`,
+      // Cost-code-level data so the agent can answer detailed questions.
+      costCodes: job.costLines.map((c) => ({
+        code: c.code,
+        name: c.name,
+        budgetHrs: c.budgetHours,
+        actualHrs: c.actualHours,
+        projectedHrs: c.projectedHours,
+        overPct: Math.round(c.overrunPct * 100),
+      })),
     };
   }
 
@@ -174,33 +183,28 @@ export default function MarginWatch() {
     }
   }
 
-  function onResolved(job: Job) {
+  function onResolved(job: Job, actionedDollars: number) {
     setResolved((s) => new Set(s).add(job.id));
-    setProtectedAmt((p) => p + job.flag!.marginAtRisk);
+    setProtectedAmt((p) => p + actionedDollars);
 
     const remaining = flagged.filter(
       (j) => !resolved.has(j.id) && j.id !== job.id
     );
+    const did =
+      actionedDollars > 0
+        ? `${usd(actionedDollars)} actioned on Job ${job.number} via change order, and the ${job.flag!.costCodeName} benchmark is updated.`
+        : `Reviewed Job ${job.number} — you deferred the action for now.`;
+    const next =
+      remaining.length > 0
+        ? ` ${remaining.length} more need you; Job ${remaining[0].number} is next at ${usdK(
+            remaining[0].flag!.marginAtRisk
+          )} at risk.`
+        : ` That clears every job that needs you today — the rest are tracking on budget.`;
     setThreads((prev) => ({
       ...prev,
       [job.id]: [
         ...(prev[job.id] ?? []),
-        {
-          id: nextId(),
-          kind: "agent",
-          text:
-            remaining.length > 0
-              ? `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
-                  job.number
-                }, and the ${job.flag!.costCodeName} benchmark just got tighter. ${
-                  remaining.length
-                } more need you; Job ${remaining[0].number} is next at ${usdK(
-                  remaining[0].flag!.marginAtRisk
-                )} at risk.`
-              : `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
-                  job.number
-                }. That clears every job that needs you today — the rest are tracking on budget.`,
-        },
+        { id: nextId(), kind: "agent", text: did + next },
       ],
     }));
   }
@@ -251,13 +255,21 @@ export default function MarginWatch() {
                   <FlagCard job={jobById(e.jobId)!} onResolved={onResolved} />
                 )}
                 {e.kind === "overview" && (
-                  <OverviewList
-                    flagged={flagged}
-                    monitoring={monitoring}
-                    calm={calm}
-                    resolved={resolved}
-                    onOpen={openJob}
-                  />
+                  <div className="space-y-3">
+                    <PortfolioRollup
+                      flagged={flagged}
+                      monitoring={monitoring}
+                      calm={calm}
+                      mitigated={protectedAmt}
+                    />
+                    <OverviewList
+                      flagged={flagged}
+                      monitoring={monitoring}
+                      calm={calm}
+                      resolved={resolved}
+                      onOpen={openJob}
+                    />
+                  </div>
                 )}
               </motion.div>
             ))}
@@ -355,6 +367,80 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
       >
         {tone.label}
       </span>
+    </div>
+  );
+}
+
+function RollStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "danger" | "brand";
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-ink-400">{label}</div>
+      <div
+        className={cn(
+          "tabular mt-0.5 text-lg font-semibold",
+          tone === "danger"
+            ? "text-rose-600"
+            : tone === "brand"
+            ? "text-brand-600"
+            : "text-ink-800"
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioRollup({
+  flagged,
+  monitoring,
+  calm,
+  mitigated,
+}: {
+  flagged: Job[];
+  monitoring: Job[];
+  calm: Job[];
+  mitigated: number;
+}) {
+  const all = [...flagged, ...monitoring, ...calm];
+  const total = all.length || 1;
+  const totalContract = all.reduce((s, j) => s + j.contractValue, 0);
+  const surfacedAtRisk = flagged.reduce((s, j) => s + j.flag!.marginAtRisk, 0);
+  const seg = (n: number) => (n / total) * 100;
+  return (
+    <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-soft">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+          <BarChart3 className="h-4 w-4" />
+        </div>
+        <h3 className="text-sm font-semibold text-ink-900">Portfolio roll-up</h3>
+        <span className="text-[11px] text-ink-400">· {all.length} active jobs</span>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <RollStat label="Contract value" value={`$${(totalContract / 1e6).toFixed(1)}M`} />
+        <RollStat label="Surfaced at risk" value={usdK(surfacedAtRisk)} tone="danger" />
+        <RollStat label="Risk actioned" value={usd(mitigated)} tone="brand" />
+      </div>
+      <div className="mt-3.5">
+        <div className="flex h-2 overflow-hidden rounded-full bg-ink-100">
+          <div className="bg-rose-400" style={{ width: `${seg(flagged.length)}%` }} />
+          <div className="bg-amber-400" style={{ width: `${seg(monitoring.length)}%` }} />
+          <div className="bg-emerald-400" style={{ width: `${seg(calm.length)}%` }} />
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink-500">
+          <span className="text-rose-600">● {flagged.length} need you</span>
+          <span className="text-amber-600">● {monitoring.length} watching</span>
+          <span className="text-emerald-600">● {calm.length} on budget</span>
+        </div>
+      </div>
     </div>
   );
 }

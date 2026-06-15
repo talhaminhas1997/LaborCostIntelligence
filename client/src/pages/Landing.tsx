@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   motion,
   AnimatePresence,
-  animate,
   useInView,
   useReducedMotion,
 } from "framer-motion";
-import { ArrowRight, Radar, HardHat, Activity } from "lucide-react";
+import { ArrowRight, Radar, HardHat, Activity, Check } from "lucide-react";
 import { Wordmark, DISCLAIMER } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { navigate } from "@/App";
@@ -58,22 +57,14 @@ const VALUE_SOON = [
  * CFMA, Projul, NCHRP) were dropped: vague or unverifiable provenance. */
 const STATS = [
   {
-    render: (t: number) => `${Math.round(1 * t)}%`,
-    caption:
-      "construction's average annual productivity growth over two decades — a third of the wider economy's",
-    source: "McKinsey Global Institute · Reinventing Construction, 2017",
+    value: "1%",
+    caption: "construction's annual productivity growth — a third of the wider economy",
+    source: "McKinsey · Reinventing Construction, 2017",
   },
   {
-    render: (t: number) => `${Math.round(80 * t)}%`,
-    caption:
-      "how far over budget large projects run — while finishing ~20% behind schedule",
-    source: "McKinsey Global Institute · Reinventing Construction, 2017",
-  },
-  {
-    render: (t: number) => `$${(1.6 * t).toFixed(1)}T`,
-    caption:
-      "annual value lost to the productivity gap — about 2% of global GDP",
-    source: "McKinsey Global Institute · Reinventing Construction, 2017",
+    value: "80%",
+    caption: "how far over budget large projects run",
+    source: "McKinsey · Reinventing Construction, 2017",
   },
 ];
 
@@ -113,8 +104,8 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Wordmark onClick={() => navigate("/")} />
           <nav className="flex items-center gap-7 text-sm text-ink-500">
-            <a href="#agent" className="hidden transition-colors hover:text-maroon sm:inline">The agent</a>
             <a href="#problem" className="hidden transition-colors hover:text-maroon sm:inline">The problem</a>
+            <a href="#agent" className="hidden transition-colors hover:text-maroon sm:inline">The agent</a>
             <a href="#how" className="hidden transition-colors hover:text-maroon sm:inline">How it works</a>
             <button
               onClick={() => navigate("/app")}
@@ -171,12 +162,39 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 2 — Cost Agent */}
+      {/* 2 — The problem (minimal) */}
+      <section id="problem" className="border-t border-ink-200 bg-white">
+        <div className="mx-auto max-w-4xl px-6 py-24 text-center sm:py-32">
+          <motion.p
+            {...fadeUp}
+            className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400"
+          >
+            The problem
+          </motion.p>
+          <motion.div
+            {...fadeUp}
+            className="mt-16 grid grid-cols-2 divide-x divide-ink-200"
+          >
+            {STATS.map((s) => (
+              <Stat key={s.value} {...s} />
+            ))}
+          </motion.div>
+          <motion.p
+            {...fadeUp}
+            className="mx-auto mt-16 max-w-2xl text-lg leading-relaxed text-ink-600 sm:text-xl"
+          >
+            Jobs don&apos;t bleed margin in the abstract — they bleed when they
+            fall behind.
+          </motion.p>
+        </div>
+      </section>
+
+      {/* 3 — Cost Agent */}
       <section id="agent" className="border-t border-ink-200 bg-ink-50">
         <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <motion.div {...fadeUp} className="text-center">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
-              Cost Agent
+              Proactive cost intelligence
             </p>
             <h2 className="mx-auto mt-5 max-w-2xl text-3xl font-extrabold leading-[1.02] tracking-[-0.02em] text-maroon sm:text-5xl">
               Always on. <span className="text-brand-600">On top of your stack.</span>
@@ -233,10 +251,14 @@ export default function Landing() {
 
             <Connector />
 
-            {/* WHAT YOU GET — live agent feed */}
+            {/* JOBS DONE — live agent feed */}
             <div className="rounded-2xl border border-ink-200 bg-white p-7">
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-400">
+                Jobs done
+              </div>
+
               {/* TODAY — lit, framed as jobs-to-be-done */}
-              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+              <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
                 <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
                   <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
                   Today · Ops
@@ -276,36 +298,6 @@ export default function Landing() {
 
           {/* Scope: hold more without holding more stress */}
           <ScopeBand />
-        </div>
-      </section>
-
-      {/* 3 — The problem (big numbers) */}
-      <section id="problem" className="border-t border-ink-200 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
-          <motion.div {...fadeUp}>
-            <p className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
-              The problem
-            </p>
-            <h2 className="mt-5 max-w-3xl text-3xl font-extrabold leading-[1.02] tracking-[-0.02em] text-maroon sm:text-5xl">
-              Margin leaks{" "}
-              <span className="text-brand-600">where no one&apos;s looking.</span>
-            </h2>
-            <p className="mt-6 max-w-3xl text-lg leading-relaxed text-ink-500">
-              Jobs don&apos;t bleed margin in the abstract — they bleed when they
-              fall behind. Schedule slippage shows up as labor burning faster
-              than the budget assumed, and by the time it&apos;s visible at
-              closeout, the margin&apos;s gone.
-            </p>
-          </motion.div>
-          <div className="mt-16 grid grid-cols-1 gap-y-12 sm:grid-cols-3 lg:flex lg:divide-x lg:divide-ink-200">
-            {STATS.map((s, i) => (
-              <Stat key={i} {...s} delay={i * 0.08} />
-            ))}
-          </div>
-          <p className="mt-12 text-xs text-ink-400">
-            Informed by conversations with project managers, project engineers,
-            and owners.
-          </p>
         </div>
       </section>
 
@@ -507,7 +499,8 @@ function AgentFeed() {
         <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
         Live
       </div>
-      <ul className="space-y-1.5">
+      {/* Fixed height so ticking actions never resize the box. */}
+      <ul className="h-[124px] space-y-1.5 overflow-hidden">
         <AnimatePresence initial={false}>
           {items.map((item) => (
             <motion.li
@@ -515,7 +508,7 @@ function AgentFeed() {
               layout
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, position: "absolute" }}
               transition={{ duration: 0.35 }}
               className="flex items-start gap-2 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5"
             >
@@ -639,6 +632,10 @@ function Focal({ cx, cy }: { cx: number; cy: number }) {
 }
 
 function CardDiagram({ variant }: { variant: "see" | "act" | "learn" }) {
+  // ACT is the human-in-the-loop step — show it explicitly: agent proposes,
+  // you approve, the work gets done.
+  if (variant === "act") return <ActDiagram />;
+
   return (
     <svg
       viewBox="0 0 320 80"
@@ -674,18 +671,6 @@ function CardDiagram({ variant }: { variant: "see" | "act" | "learn" }) {
         </>
       )}
 
-      {variant === "act" && (
-        <>
-          <circle cx="30" cy="40" r="3.5" fill={DIA_LINE} />
-          <line x1="34" y1="40" x2="104" y2="40" stroke={DIA_LINE} strokeWidth="1.2" />
-          <line x1="122" y1="40" x2="192" y2="40" stroke={DIA_LINE} strokeWidth="1.2" />
-          <rect x="201" y="33" width="14" height="14" rx="2" transform="rotate(45 208 40)" stroke={DIA_BRAND} strokeWidth="1.5" fill="white" />
-          <line x1="220" y1="40" x2="286" y2="40" stroke={DIA_LINE} strokeWidth="1.2" />
-          <circle cx="292" cy="40" r="4" fill={DIA_MAROON} />
-          <Focal cx={112} cy={40} />
-        </>
-      )}
-
       {variant === "learn" && (
         <>
           <line x1="130" y1="48" x2="214" y2="48" stroke={DIA_LINE} strokeWidth="1.2" />
@@ -698,49 +683,72 @@ function CardDiagram({ variant }: { variant: "see" | "act" | "learn" }) {
   );
 }
 
-/* ---- A single count-up stat block (animates on scroll into view) ---- */
+/* ---- ACT diagram: the human in the loop — agent proposes, you approve, done ---- */
+function ActDiagram() {
+  return (
+    <div className="mt-7 flex h-[84px] items-center justify-center gap-2">
+      <FlowNode tone="agent" label="Agent" icon={<Radar className="h-4 w-4" />} />
+      <ArrowRight className="mt-3 h-4 w-4 shrink-0 self-start text-ink-300" />
+      <FlowNode tone="human" label="You approve" icon={<HardHat className="h-4 w-4" />} />
+      <ArrowRight className="mt-3 h-4 w-4 shrink-0 self-start text-ink-300" />
+      <FlowNode tone="done" label="Done" icon={<Check className="h-4 w-4" />} />
+    </div>
+  );
+}
+
+function FlowNode({
+  tone,
+  label,
+  icon,
+}: {
+  tone: "agent" | "human" | "done";
+  label: string;
+  icon: ReactNode;
+}) {
+  const ring =
+    tone === "agent"
+      ? "node-pulse bg-brand-600 text-white"
+      : tone === "human"
+      ? "border-2 border-brand-500 bg-white text-brand-600"
+      : "bg-maroon text-white";
+  return (
+    <div className="flex w-[72px] flex-col items-center gap-2">
+      <div className={`relative flex h-10 w-10 items-center justify-center rounded-full ${ring}`}>
+        {icon}
+      </div>
+      <span
+        className={`text-center text-[9px] uppercase tracking-[0.1em] ${
+          tone === "human" ? "font-semibold text-brand-600" : "text-ink-400"
+        }`}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/* ---- A single static stat (constant box, no count-up jitter) ---- */
 function Stat({
-  render,
+  value,
   caption,
   source,
-  delay = 0,
 }: {
-  render: (t: number) => string;
+  value: string;
   caption: string;
   source: string;
-  delay?: number;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
-  const [t, setT] = useState(0);
-
-  useEffect(() => {
-    if (!inView) return;
-    const controls = animate(0, 1, {
-      duration: 1.2,
-      delay,
-      ease: "easeOut",
-      onUpdate: (v) => setT(v),
-    });
-    return () => controls.stop();
-  }, [inView, delay]);
-
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 16 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.5, delay }}
-      className="lg:flex-1 lg:px-8 lg:first:pl-0 lg:last:pr-0"
-    >
+    <div className="px-6">
       <div className="tabular text-5xl font-extrabold tracking-[-0.03em] text-maroon sm:text-6xl">
-        {render(t)}
+        {value}
       </div>
-      <p className="mt-4 text-sm leading-relaxed text-ink-500">{caption}</p>
+      <p className="mx-auto mt-4 max-w-[16rem] text-sm leading-relaxed text-ink-500">
+        {caption}
+      </p>
       <p className="mt-3 text-[11px] uppercase tracking-wide text-ink-400">
         {source}
       </p>
-    </motion.div>
+    </div>
   );
 }
 

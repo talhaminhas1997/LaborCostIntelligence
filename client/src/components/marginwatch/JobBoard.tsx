@@ -80,67 +80,51 @@ export function JobBoard({
           </span>
         </button>
 
-        {/* Needs you */}
-        <SectionLabel tone="danger" title="Needs you" sub="ranked" />
-        <div className="space-y-1.5">
-          {flagged.map((job, i) => {
-            const resolved = resolvedJobs.has(job.id);
-            return (
-              <motion.button
-                key={job.id}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => onSelectJob(job)}
-                className={cn(
-                  "w-full rounded-lg border p-2.5 text-left transition-all",
-                  activeThreadId === job.id
-                    ? "border-brand-400 bg-brand-50 shadow-sm"
-                    : resolved
-                    ? "border-emerald-200 bg-emerald-50/60 hover:border-emerald-300"
-                    : "border-ink-200 bg-white hover:border-brand-300"
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="flex h-4 w-4 items-center justify-center rounded bg-maroon text-[10px] font-semibold text-white">
-                      {job.flag!.rank}
-                    </span>
-                    <span className="text-xs font-semibold text-ink-800">
-                      Job {job.number}
-                    </span>
+        {/* Needs you — only unresolved flags; resolved ones move to Mitigated */}
+        {(() => {
+          const needsYou = flagged.filter((j) => !resolvedJobs.has(j.id));
+          const done = flagged.filter((j) => resolvedJobs.has(j.id));
+          return (
+            <>
+              <SectionLabel tone="danger" title="Needs you" sub="ranked" />
+              {needsYou.length > 0 ? (
+                <div className="space-y-1.5">
+                  {needsYou.map((job, i) => (
+                    <FlaggedRow
+                      key={job.id}
+                      job={job}
+                      i={i}
+                      active={activeThreadId === job.id}
+                      resolved={false}
+                      onClick={() => onSelectJob(job)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="px-2 text-xs font-medium text-emerald-600">
+                  ✓ All clear — every flagged job mitigated.
+                </p>
+              )}
+              {done.length > 0 && (
+                <>
+                  <SectionLabel tone="success" title="Mitigated" sub="acted today" />
+                  <div className="space-y-1.5">
+                    {done.map((job, i) => (
+                      <FlaggedRow
+                        key={job.id}
+                        job={job}
+                        i={i}
+                        active={activeThreadId === job.id}
+                        resolved
+                        onClick={() => onSelectJob(job)}
+                      />
+                    ))}
                   </div>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      resolved
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-rose-100 text-rose-700"
-                    )}
-                  >
-                    {resolved ? "Risk mitigated" : KIND_LABEL[job.flag!.kind]}
-                  </span>
-                </div>
-                <p className="mt-1 truncate text-xs text-ink-500">{job.name}</p>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span className="font-mono text-[10px] text-ink-400">
-                    {job.flag!.costCode}
-                  </span>
-                  <span
-                    className={cn(
-                      "tabular text-xs font-semibold",
-                      resolved ? "text-emerald-600" : "text-rose-600"
-                    )}
-                  >
-                    {resolved
-                      ? `✓ plan run`
-                      : `${usdK(job.flag!.marginAtRisk)} at risk`}
-                  </span>
-                </div>
-              </motion.button>
-            );
-          })}
-        </div>
+                </>
+              )}
+            </>
+          );
+        })()}
 
         {/* Watching */}
         {monitoring.length > 0 && (
@@ -175,6 +159,66 @@ export function JobBoard({
         </div>
       </div>
     </div>
+  );
+}
+
+function FlaggedRow({
+  job,
+  i,
+  active,
+  resolved,
+  onClick,
+}: {
+  job: Job;
+  i: number;
+  active: boolean;
+  resolved: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: i * 0.05 }}
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-lg border p-2.5 text-left transition-all",
+        active
+          ? "border-brand-400 bg-brand-50 shadow-sm"
+          : resolved
+          ? "border-emerald-200 bg-emerald-50/60 hover:border-emerald-300"
+          : "border-ink-200 bg-white hover:border-brand-300"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="flex h-4 w-4 items-center justify-center rounded bg-maroon text-[10px] font-semibold text-white">
+            {job.flag!.rank}
+          </span>
+          <span className="text-xs font-semibold text-ink-800">Job {job.number}</span>
+        </div>
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-medium",
+            resolved ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+          )}
+        >
+          {resolved ? "Risk mitigated" : KIND_LABEL[job.flag!.kind]}
+        </span>
+      </div>
+      <p className="mt-1 truncate text-xs text-ink-500">{job.name}</p>
+      <div className="mt-1.5 flex items-center justify-between">
+        <span className="font-mono text-[10px] text-ink-400">{job.flag!.costCode}</span>
+        <span
+          className={cn(
+            "tabular text-xs font-semibold",
+            resolved ? "text-emerald-600" : "text-rose-600"
+          )}
+        >
+          {resolved ? `✓ plan run` : `${usdK(job.flag!.marginAtRisk)} at risk`}
+        </span>
+      </div>
+    </motion.button>
   );
 }
 

@@ -112,6 +112,8 @@ export interface JobFlag extends ScoreParts {
   why: string;
   marginNow: number; // baseline margin pts (at bid)
   marginAtCompletion: number; // projected pts if unaddressed
+  detectedWeeksAgo: number; // when the drift first crossed the noise floor
+  trend: number[]; // recent overrun-% trajectory (oldest → current)
   plan: ActionStep[];
 }
 
