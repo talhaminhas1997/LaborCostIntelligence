@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, ArrowRight, LayoutGrid, BarChart3, ChevronLeft } from "lucide-react";
+import { Send, LayoutGrid, BarChart3, ChevronLeft } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -41,7 +41,7 @@ export default function MarginWatch() {
       {
         id: nextId(),
         kind: "agent",
-        text: `Morning. Miter has the real-time cost-coded actuals — I forecast where each of these ${PORTFOLIO_STATS.jobsMonitored} active jobs lands at completion and watch every one for drift, so you don't have to. Most are tracking on budget; I only surface the few where margin is genuinely at risk, ranked by dollars at risk and time left to act. ${flagged.length} need you right now — open one to see the drift and a plan ready to approve.`,
+        text: `Morning. I forecast cost-at-completion for all ${PORTFOLIO_STATS.jobsMonitored} active jobs off Miter's live actuals and watch each for drift — surfacing only the few where margin is genuinely at risk. ${flagged.length} need you today; open one on the left for the drift and a plan to approve.`,
       },
       { id: nextId(), kind: "overview" },
     ],
@@ -273,21 +273,12 @@ export default function MarginWatch() {
                   <FlagCard job={jobById(e.jobId)!} onResolved={onResolved} />
                 )}
                 {e.kind === "overview" && (
-                  <div className="space-y-3">
-                    <PortfolioRollup
-                      flagged={flagged}
-                      monitoring={monitoring}
-                      calm={calm}
-                      mitigated={protectedAmt}
-                    />
-                    <OverviewList
-                      flagged={flagged}
-                      monitoring={monitoring}
-                      calm={calm}
-                      resolved={resolved}
-                      onOpen={openJob}
-                    />
-                  </div>
+                  <PortfolioRollup
+                    flagged={flagged}
+                    monitoring={monitoring}
+                    calm={calm}
+                    mitigated={protectedAmt}
+                  />
                 )}
               </motion.div>
             ))}
@@ -480,69 +471,6 @@ function PortfolioRollup({
           <span className="text-emerald-600">● {calm.length} on budget</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-function OverviewList({
-  flagged,
-  monitoring,
-  calm,
-  resolved,
-  onOpen,
-}: {
-  flagged: Job[];
-  monitoring: Job[];
-  calm: Job[];
-  resolved: Set<string>;
-  onOpen: (job: Job) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      {flagged.map((job) => {
-        const done = resolved.has(job.id);
-        return (
-          <button
-            key={job.id}
-            onClick={() => onOpen(job)}
-            className={cn(
-              "flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition-all",
-              done
-                ? "border-emerald-200 bg-emerald-50/60"
-                : "border-ink-200 bg-white hover:border-brand-300 hover:shadow-soft"
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink-900 text-[11px] font-semibold text-white">
-                {job.flag!.rank}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-ink-800">
-                  Job {job.number} · {job.name}
-                </div>
-                <div className="truncate text-xs text-ink-500">
-                  {job.flag!.costCode} {job.flag!.costCodeName} · {job.flag!.overPct}% over
-                </div>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={cn(
-                  "tabular text-sm font-semibold",
-                  done ? "text-emerald-600" : "text-rose-600"
-                )}
-              >
-                {done ? `✓ plan run` : `${usdK(job.flag!.marginAtRisk)}`}
-              </span>
-              <ArrowRight className="h-4 w-4 text-ink-300" />
-            </div>
-          </button>
-        );
-      })}
-      <p className="px-1 pt-1 text-xs text-ink-500">
-        {monitoring.length} more drifting but below the line to act on · {calm.length}{" "}
-        tracking on budget. Open any job on the left for its own thread.
-      </p>
     </div>
   );
 }
