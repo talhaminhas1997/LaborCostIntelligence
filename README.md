@@ -90,22 +90,30 @@ or a deterministic fallback if the key is missing or the call fails).
 
 ---
 
-## Build
+## Deploy to Vercel
+
+The repo is Vercel-ready. The Vite client builds to a static site and the API
+runs as serverless functions in `/api` (`chat`, `extract`, `analyze`, `health`),
+all sharing `api/_lib/core.ts`. The local Express server (`server/`) is only used
+for `npm run dev` and calls the same shared core.
+
+From the Vercel dashboard:
+
+1. **Add New → Project → Import** this repo. The settings come from `vercel.json`
+   (build command, `client/dist` output, function config, SPA rewrite) — leave
+   them as detected.
+2. **Settings → Environment Variables** → add `ANTHROPIC_API_KEY` = your key, for
+   **Production, Preview, Development**.
+3. **Deploy.** Every push to `main` redeploys.
+
+Or via CLI: `npm i -g vercel && vercel` (preview) then `vercel --prod`.
+
+Without the key the deploy still works on deterministic fallbacks; with it, chat,
+takeoff extraction, and bid analysis use live Claude. The Margin Watch portfolio
+always runs on seeded data by design.
+
+## Build (local production check)
 
 ```bash
-npm run build      # type-checks + builds server (dist/) and client (client/dist/)
-npm start          # serves the built API
+npm run build      # builds the client to client/dist (what Vercel serves)
 ```
-
-## Deploy
-
-This is a two-process app (Vite static client + Express API), so it isn't a
-zero-config single-target deploy. Typical setup:
-
-- **Client:** build `client/` (`npm --prefix client run build`) and host
-  `client/dist` as a static site.
-- **API:** run the Express server (`npm --prefix server run build && npm --prefix server start`)
-  on any Node host, with `ANTHROPIC_API_KEY` set, and point the client's `/api`
-  calls at it.
-
-For local demos, `npm run dev` is all you need.

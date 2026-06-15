@@ -6,7 +6,7 @@ import type {
   ExtractResult,
   PhaseResult,
   Status,
-} from "./types.js";
+} from "./types";
 
 /* =========================================================================
  * Shared helpers
