@@ -118,7 +118,7 @@ export default function MarginWatch({
         tone: "calm",
         text: `Job ${job.number} is tracking on budget at ${Math.round(
           job.pctComplete * 100
-        )}% complete — margin holding near ${job.projectedMarginPct}%. Nothing to action, but ask me anything.`,
+        )}% installed (by field-logged units) — margin holding near ${job.projectedMarginPct}%. Nothing to action, but ask me anything.`,
       },
     ];
   }
@@ -374,7 +374,7 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
           <span className="truncate text-xs text-ink-500">· {job.name}</span>
         </div>
         <div className="text-[11px] text-ink-500">
-          {job.trade} · {job.region} · {Math.round(job.pctComplete * 100)}% complete
+          {job.trade} · {job.region} · {Math.round(job.pctComplete * 100)}% installed
         </div>
       </div>
       <span

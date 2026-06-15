@@ -312,7 +312,7 @@ function whyFor(
 ): string {
   const pct = Math.round(driver.overrunPct * 100);
   const drvK = "$" + Math.round(driverAtRisk / 1000) + "k";
-  const lead = `Actual hours booked to ${driver.code} are outpacing the budgeted rate — the crew is logging ~${pct}% more hours per unit than comparable completed ${seed.trade} jobs in ${seed.region}. At the current burn rate that's ${drvK} of projected overrun on this cost code.`;
+  const lead = `Hours booked to ${driver.code} (Miter Payroll) are outpacing the units installed (Field Ops) — the crew is running ~${pct}% more hours per unit than the job was budgeted for. At that production rate it projects to ${drvK} of overrun on this cost code.`;
   if (kind === "added-scope")
     return `${lead} It reads as out-of-scope work, so most of it should be billable via a change order if you act while ${sp.weeksLeftToAct} weeks of install remain.`;
   if (kind === "under-recovery")

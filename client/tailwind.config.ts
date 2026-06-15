@@ -31,6 +31,12 @@ const config: Config = {
           800: "#1e293b",
           900: "#0f172a",
         },
+        // Miter deep maroon — the dark brand base. Used for the dark headline
+        // tone and any dark surfaces (panels/footer) via white/alpha overlays.
+        maroon: {
+          DEFAULT: "#260F14",
+          900: "#260F14",
+        },
       },
       fontFamily: {
         sans: [

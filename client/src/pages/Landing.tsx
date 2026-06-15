@@ -6,17 +6,12 @@ import {
   Eye,
   Workflow,
   GraduationCap,
-  AlertTriangle,
-  Check,
   Radar,
-  ShieldCheck,
 } from "lucide-react";
-import { Wordmark, Logo, DISCLAIMER } from "@/components/Brand";
+import { Wordmark, DISCLAIMER } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
 import { navigate } from "@/App";
-import { usd, usdK } from "@/lib/utils";
-import { flaggedJobs, calmJobs } from "@/lib/seed";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -125,53 +120,45 @@ export default function Landing() {
       </header>
 
       {/* 1 — Hero (ops beachhead) */}
-      <section className="relative overflow-hidden">
-        <div className="bg-grid bg-grid-fade absolute inset-0" />
-        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-28">
-          <motion.div {...fadeUp}>
-            <Badge tone="brand">
-              <Activity className="h-3.5 w-3.5" />
-              The labor cost intelligence layer for construction
-            </Badge>
-          </motion.div>
+      <section className="relative">
+        <div className="mx-auto max-w-6xl px-6 pb-24 pt-24 sm:pb-32 sm:pt-36">
+          <motion.p
+            {...fadeUp}
+            className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400"
+          >
+            The labor cost intelligence layer for construction
+          </motion.p>
           <motion.h1
             {...fadeUp}
             transition={{ duration: 0.5, delay: 0.05 }}
-            className="mt-6 max-w-4xl text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl"
+            className="mt-8 max-w-5xl text-[2.6rem] font-extrabold leading-[0.98] tracking-[-0.03em] text-maroon sm:text-7xl"
           >
-            Stop margin from leaking on jobs you&apos;ve already{" "}
-            <span className="text-brand-600">won</span>.
+            Stop margin from leaking on{" "}
+            <span className="text-brand-600">jobs you&apos;ve already won.</span>
           </motion.h1>
           <motion.p
             {...fadeUp}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="mt-6 max-w-3xl text-lg leading-relaxed text-ink-600"
+            className="mt-8 max-w-2xl text-lg leading-relaxed text-ink-500"
           >
-            Built for the ops team running the work: the Cost Risk Agent watches
-            every active job&apos;s labor cost in real time, surfaces only the
-            risks that matter, and — on your approval — takes the multi-step fix
-            all the way to done.
+            For ops: the Cost Risk Agent watches every job&apos;s labor cost in
+            real time, surfaces only what&apos;s at risk, and runs the fix to
+            done — on your approval.
           </motion.p>
           <motion.div
             {...fadeUp}
             transition={{ duration: 0.5, delay: 0.15 }}
-            className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center"
+            className="mt-10 flex items-center gap-5"
           >
-            <Button size="lg" onClick={() => navigate("/app")}>
-              Try the demo <ArrowRight className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-ink-500">
-              Live demo on a seeded portfolio — no setup.
-            </span>
-          </motion.div>
-
-          {/* Hero portfolio card */}
-          <motion.div
-            {...fadeUp}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="mt-16"
-          >
-            <PortfolioTeaser />
+            <button
+              onClick={() => navigate("/app")}
+              className="group inline-flex items-center gap-2 text-base font-semibold text-brand-600 transition-colors hover:text-brand-700"
+            >
+              Try the demo
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
+            <span className="h-4 w-px bg-ink-200" />
+            <span className="text-sm text-ink-400">Live demo · no setup.</span>
           </motion.div>
         </div>
       </section>
@@ -521,96 +508,3 @@ function Stat({
   );
 }
 
-/* ---- Hero teaser: a calm portfolio with one job lighting up ---- */
-function PortfolioTeaser() {
-  const flag = flaggedJobs()[0];
-  const quiet = calmJobs().slice(0, 3);
-  return (
-    <div className="mx-auto max-w-2xl rounded-2xl border border-ink-200 bg-white p-4 shadow-lift sm:p-5">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between border-b border-ink-100 pb-3">
-        <div className="flex items-center gap-2">
-          <Logo className="h-4 w-4" />
-          <span className="text-sm font-semibold text-ink-800">
-            Cost Risk Agent
-          </span>
-          <span className="flex items-center gap-1 text-[11px] text-emerald-600">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> live
-          </span>
-        </div>
-        <span className="tabular text-xs text-ink-500">
-          {usd(214000)} protected · 16 jobs monitored
-        </span>
-      </div>
-
-      {/* The one that needs you */}
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
-        Needs you
-      </div>
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2.5"
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-ink-800">
-              Job {flag.number} · {flag.name}
-            </div>
-            <div className="truncate text-xs text-ink-500">
-              {flag.flag!.costCodeName} {flag.flag!.overPct}% over budget
-            </div>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className="tabular text-sm font-semibold text-rose-600">
-            {usdK(flag.flag!.marginAtRisk)} at risk
-          </span>
-          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-medium text-brand-700">
-            Plan ready
-          </span>
-        </div>
-      </motion.div>
-
-      {/* The quiet majority */}
-      <div className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
-        On budget
-      </div>
-      <div className="space-y-1">
-        {quiet.map((job, i) => (
-          <motion.div
-            key={job.id}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 + i * 0.08 }}
-            className="flex items-center justify-between rounded-md px-2 py-1.5"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                <Check className="h-2.5 w-2.5" />
-              </span>
-              <span className="truncate text-xs text-ink-600">
-                Job {job.number} · {job.name}
-              </span>
-            </div>
-            <span className="tabular shrink-0 text-[11px] text-ink-400">
-              on budget
-            </span>
-          </motion.div>
-        ))}
-        <div className="px-2 pt-0.5 text-[11px] text-ink-400">
-          + 12 more tracking on budget
-        </div>
-      </div>
-
-      <p className="mt-4 border-t border-ink-100 pt-3 text-xs text-ink-500">
-        Most jobs sit quiet. The agent surfaces only the few that need you —
-        ranked by margin at risk, each with a plan ready to approve.
-      </p>
-    </div>
-  );
-}

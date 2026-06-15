@@ -8,6 +8,7 @@ import {
   TrendingDown,
   ShieldCheck,
   RefreshCw,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, usd, usdK } from "@/lib/utils";
@@ -260,6 +261,15 @@ export function FlagCard({
             <Check className="h-5 w-5 text-emerald-500" />
           </motion.div>
         )}
+
+        {/* Data provenance — every figure traces to a first-party Miter source */}
+        <div className="mt-3 flex items-start gap-1.5 border-t border-ink-100 pt-2.5 text-[11px] text-ink-400">
+          <Database className="mt-px h-3 w-3 shrink-0" />
+          <span>
+            Forecast from hours booked (Miter Payroll) vs. units installed (Miter
+            Field Ops), against the ERP budget. Illustrative.
+          </span>
+        </div>
       </div>
     </div>
   );
