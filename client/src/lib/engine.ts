@@ -144,6 +144,11 @@ function buildPlan(
         detail: `Plotted ${code} ${name} labor by day — production broke from the as-bid rate ~Wk 6. Pulled the Procore change events over that window.`,
         targetsDollars: 0,
         artifact: "ASI-014 + RFI-022 matched to the window",
+        systems: [
+          { name: "Miter Payroll", mode: "read", note: "hours by day" },
+          { name: "Miter Field Ops", mode: "read", note: "units installed" },
+          { name: "Procore", mode: "read", note: "change events" },
+        ],
       },
       {
         id: "d-basis",
@@ -156,6 +161,7 @@ function buildPlan(
           options: ["Yes — billable", "Partly", "No — our productivity"],
           recommended: 0,
         },
+        systems: [{ name: "Procore", mode: "read", note: "ASI-014 / RFI-022" }],
       },
       {
         id: "action",
@@ -163,6 +169,7 @@ function buildPlan(
         detail: `Bill only the change-tied hours × the billable rate — not the full ${overPct}%. COR assembled with the labor backup and the ASI-014 narrative.`,
         targetsDollars: driverDollars,
         artifact: "COR-008 drafted in Procore",
+        systems: [{ name: "Procore", mode: "write", note: "drafts COR-008" }],
       },
       {
         id: "d-submit",
@@ -175,6 +182,7 @@ function buildPlan(
           options: ["Give me the draft", "Hold for my review"],
           recommended: 0,
         },
+        systems: [{ name: "Email", mode: "write", note: "draft to the GC — you send" }],
         draft: {
           kind: "email",
           to: "GC project manager",
@@ -197,6 +205,9 @@ Thanks,
         detail: "Rebaselined the EAC with the COR pending (approval-risk haircut), flagged the cash-flow lag, and updated the live budget.",
         targetsDollars: 0,
         artifact: "Budget updated · status follow-up set",
+        systems: [
+          { name: "ERP budget", mode: "write", note: "EAC + live budget" },
+        ],
       },
       {
         id: "learn",
@@ -205,6 +216,7 @@ Thanks,
         targetsDollars: 0,
         artifact: `${name} benchmark tightened`,
         feedsBenchmark: true,
+        systems: [{ name: "Estimating benchmark", mode: "write" }],
       },
     ];
   }

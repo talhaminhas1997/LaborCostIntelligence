@@ -97,6 +97,9 @@ export interface ActionStep {
     subject: string;
     body: string;
   };
+  /** External systems this step touches — shown on the step so the ops manager
+   *  sees exactly what's read and what's written before approving. */
+  systems?: { name: string; mode: "read" | "write"; note?: string }[];
   /** Present → this step is a PM decision point (a judgment only the human can
    *  make), not an autonomous agent action. The agent has already done the work
    *  to surface it; the PM just picks. `recommended` is the agent's default. */

@@ -27,6 +27,12 @@ type Entry =
 const OVERVIEW = "overview";
 const jobById = (id: string) => PORTFOLIO.find((j) => j.id === id);
 
+// Marks where the AI answer ends and the demo disclaimer begins (rendered muted).
+const DISCLAIMER_SENTINEL = "␟";
+const SEED_DISCLAIMER =
+  "Illustrative — figures from seeded demo data, not a live feed.";
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export default function MarginWatch() {
   const flagged = useMemo(() => flaggedJobs(), []);
   const monitoring = useMemo(() => monitoringJobs(), []);
@@ -124,7 +130,10 @@ export default function MarginWatch() {
     for (const e of entries) {
       if (e.kind === "user") msgs.push({ role: "user", content: e.text });
       else if (e.kind === "agent" || e.kind === "note")
-        msgs.push({ role: "assistant", content: (e as any).text });
+        msgs.push({
+          role: "assistant",
+          content: (e as any).text.split(DISCLAIMER_SENTINEL)[0].trim(),
+        });
     }
     while (msgs.length && msgs[0].role === "assistant") msgs.shift();
     return msgs.slice(-10);
@@ -153,6 +162,46 @@ export default function MarginWatch() {
     };
   }
 
+  /** Deterministic, data-grounded answers for the common questions — so the
+   *  demo never hedges or invents figures. Returns null to fall back to the LLM. */
+  function seededReply(q: string): string | null {
+    const s = q.toLowerCase();
+    const job = jobById(activeId);
+    const k = (n: number) => usdK(n);
+
+    if (job?.flag) {
+      const f = job.flag;
+      if (/why.*(drift|over|driv)|what.*driv/.test(s))
+        return `${f.why || f.summary} The driver is ${f.costCode} ${f.costCodeName} — ${f.overPct}% over, pulling projected margin from ${f.marginNow}% to ${f.marginAtCompletion}% if it's left alone.`;
+      if (/walk.*(through|plan)|the plan|what.*step|steps?\b/.test(s)) {
+        const steps = f.plan
+          .map((p, i) => `${i + 1}. ${p.label}${p.decision ? "  — your call" : ""}`)
+          .join("\n");
+        return `Here's the ${f.plan.length}-step plan for Job ${job.number}:\n${steps}\n\nThe steps marked "your call" pause for your decision; the rest I run on your approval.`;
+      }
+      if (/recover|claw|get.*back|billable|salvage/.test(s))
+        return `${cap(f.recoverability)} recoverability. ${f.why || f.summary} You've got ${f.weeksLeftToAct} weeks of work left to act while it's still recoverable.`;
+    }
+
+    if (/worst|which job|biggest|top |priorit/.test(s)) {
+      const w = flagged[0];
+      if (!w?.flag) return null;
+      const f = w.flag;
+      return `Job ${w.number} — ${w.name} is your worst exposure: ${f.costCodeName} ${f.overPct}% over, ${k(f.marginAtRisk)} at risk with ${f.weeksLeftToAct} weeks left to act. ${cap(f.recoverability)} recoverability — it's ${f.driverLabel.toLowerCase()}. It ranks #1 because it pairs the biggest dollars at risk with enough runway to actually recover. Open it and I'll walk the plan.`;
+    }
+    if (/exposure|summar|portfolio|across|overall|total/.test(s)) {
+      const total = flagged.reduce((sum, j) => sum + (j.flag?.marginAtRisk || 0), 0);
+      const lines = flagged
+        .map(
+          (j) =>
+            `• Job ${j.number} — ${k(j.flag!.marginAtRisk)} (${j.flag!.costCodeName} ${j.flag!.overPct}% over, ${j.flag!.driverLabel.toLowerCase()})`
+        )
+        .join("\n");
+      return `Across ${PORTFOLIO_STATS.jobsMonitored} active jobs, ${flagged.length} need you — about ${k(total)} at risk in total:\n${lines}\n\n${monitoring.length} more are drifting below the surfacing line; the other ${calm.length} are tracking on budget. The driver is labor-heavy cost codes burning hours faster than units convert.`;
+    }
+    return null;
+  }
+
   async function send(text: string) {
     const q = text.trim();
     if (!q || sending) return;
@@ -161,19 +210,33 @@ export default function MarginWatch() {
     setSending(true);
     push({ kind: "typing" });
     const threadId = activeId;
+    const withDisclaimer = (reply: string) =>
+      `${reply}\n\n${DISCLAIMER_SENTINEL}${SEED_DISCLAIMER}`;
+    const land = (reply: string) =>
+      setThreads((prev) => ({
+        ...prev,
+        [threadId]: [
+          ...(prev[threadId] ?? []).filter((e) => e.kind !== "typing"),
+          { id: nextId(), kind: "agent", text: withDisclaimer(reply) },
+        ],
+      }));
+
+    // Common questions answer deterministically from the seeded portfolio.
+    const seeded = seededReply(q);
+    if (seeded) {
+      await new Promise((r) => window.setTimeout(r, 650));
+      land(seeded);
+      setSending(false);
+      return;
+    }
+
     try {
       const history = [...chatHistory(), { role: "user", content: q } as ChatMessage];
       const { reply } = await chat(history, {
         mode: "margin-watch",
         jobContext: jobContext(),
       });
-      setThreads((prev) => ({
-        ...prev,
-        [threadId]: [
-          ...(prev[threadId] ?? []).filter((e) => e.kind !== "typing"),
-          { id: nextId(), kind: "agent", text: reply },
-        ],
-      }));
+      land(reply);
     } catch {
       setThreads((prev) => ({
         ...prev,
@@ -513,13 +576,22 @@ function PortfolioRollup({
 /* ------------------------------------------------------------ bubbles */
 
 function AgentBubble({ text }: { text: string }) {
+  const cut = text.indexOf(DISCLAIMER_SENTINEL);
+  const body = cut >= 0 ? text.slice(0, cut).trimEnd() : text;
+  const disclaimer =
+    cut >= 0 ? text.slice(cut + DISCLAIMER_SENTINEL.length).trim() : null;
   return (
     <div className="flex gap-2.5">
       <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-ink-200 bg-white">
         <Logo className="h-4 w-4" />
       </div>
       <div className="max-w-[88%] rounded-2xl rounded-tl-sm border border-ink-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-ink-700 shadow-soft">
-        {text}
+        <p className="whitespace-pre-line">{body}</p>
+        {disclaimer && (
+          <p className="mt-2 border-t border-ink-100 pt-1.5 text-[11px] italic leading-snug text-ink-400">
+            {disclaimer}
+          </p>
+        )}
       </div>
     </div>
   );
