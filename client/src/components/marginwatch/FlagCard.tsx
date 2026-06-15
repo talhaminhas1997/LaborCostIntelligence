@@ -13,13 +13,15 @@ import {
   Clock,
   ChevronRight,
   ChevronDown,
+  Mail,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chat } from "@/lib/api";
 import { cn, fmt, usd, usdK } from "@/lib/utils";
-import type { CostCodeProjection, Job } from "@/lib/types";
+import type { ActionStep, CostCodeProjection, Job } from "@/lib/types";
 
-type StepState = "pending" | "running" | "done" | "skipped";
+type StepState = "pending" | "running" | "done" | "skipped" | "awaiting";
 
 /**
  * Conversational flag card: the job-cost drift, the proposed multi-step plan,
@@ -46,9 +48,17 @@ export function FlagCard({
   const [amounts, setAmounts] = useState<Record<number, number>>({});
   const [confirms, setConfirms] = useState<Record<number, string>>({});
   const [refining, setRefining] = useState(false);
+  // Drafts the agent can't send (emails / docs to a third party) — expanded for
+  // the PM to copy and send themselves.
+  const [openDrafts, setOpenDrafts] = useState<Record<number, boolean>>({});
+  const [copied, setCopied] = useState<number | null>(null);
+  // The decision step the auto-runner is paused on, awaiting the PM's call.
+  const [awaiting, setAwaiting] = useState<number | null>(null);
   // Refs mirror amounts/skips so the actioned $ can be read synchronously at finish.
   const amountsRef = useRef<Record<number, number>>({});
   const skippedRef = useRef<Set<number>>(new Set());
+  // Synchronous "no more pausing" flag for the recursive runner.
+  const autoRef = useRef(false);
 
   // $ actually committed by the financial action (edited, or 0 if skipped).
   const actionedDollars = () => {
@@ -68,44 +78,68 @@ export function FlagCard({
     } else setReviewIdx(idx + 1);
   };
 
-  function runFrom(idx: number, onAllDone: () => void) {
-    if (idx >= flag.plan.length) return onAllDone();
+  // The auto-runner: agent steps execute on their own; at a decision step it
+  // PAUSES for the PM's call — unless autonomous mode is on, in which case it
+  // takes the agent's recommended call and keeps going (like Claude does).
+  function runAuto(idx: number) {
+    if (idx >= flag.plan.length) {
+      setPhase("done");
+      onResolved(job, actionedDollars());
+      return;
+    }
+    const step = flag.plan[idx];
+    if (step.decision && !autoRef.current) {
+      setStep(idx, "awaiting");
+      setAwaiting(idx);
+      return; // wait for decide() / turnAutonomous()
+    }
     setStep(idx, "running");
     window.setTimeout(() => {
-      // On "approve all", a decision step takes the agent's recommended call.
-      const d = flag.plan[idx].decision;
-      if (d) setConfirms((c) => ({ ...c, [idx]: `→ ${d.options[d.recommended]}` }));
+      if (step.decision)
+        setConfirms((c) => ({
+          ...c,
+          [idx]: `→ ${step.decision!.options[step.decision!.recommended]}`,
+        }));
       setStep(idx, "done");
-      window.setTimeout(() => runFrom(idx + 1, onAllDone), 300);
+      window.setTimeout(() => runAuto(idx + 1), 300);
     }, 780);
   }
 
-  /** Review-each: the PM makes a decision-point call → record it and advance. */
-  function chooseDecision(optionText: string) {
+  /** Approve the plan → run, pausing at each "your call" decision. */
+  function approveAndRun() {
+    autoRef.current = false;
+    setPhase("executing");
+    runAuto(0);
+  }
+
+  /** Run the whole plan without stopping — agent takes every recommended call. */
+  function runAutonomously() {
+    autoRef.current = true;
+    setPhase("executing");
+    runAuto(0);
+  }
+
+  /** A decision is made — from an executing pause, or the step-through path. */
+  function decide(idx: number, optionText: string) {
     if (refining) return;
-    const idx = reviewIdx;
     setConfirms((c) => ({ ...c, [idx]: `→ ${optionText}` }));
     setStep(idx, "done");
-    advance(idx);
+    if (awaiting === idx) {
+      setAwaiting(null);
+      window.setTimeout(() => runAuto(idx + 1), 300);
+    } else {
+      advance(idx); // step-through (review) path
+    }
   }
 
-  function approveAll() {
-    setPhase("executing");
-    runFrom(0, () => {
-      setPhase("done");
-      onResolved(job, actionedDollars());
-    });
-  }
-
-  // Hand off mid-stream: run the current step and the rest autonomously,
-  // taking the recommended call on any remaining decisions.
-  function goAutonomous() {
+  /** From a pause (or the step-through path), hand the rest off autonomously. */
+  function turnAutonomous() {
     if (refining) return;
+    autoRef.current = true;
+    const idx = awaiting != null ? awaiting : reviewIdx;
+    setAwaiting(null);
     setPhase("executing");
-    runFrom(reviewIdx, () => {
-      setPhase("done");
-      onResolved(job, actionedDollars());
-    });
+    runAuto(idx);
   }
 
   async function approveReviewStep() {
@@ -152,6 +186,13 @@ export function FlagCard({
     setConfirms((c) => ({ ...c, [idx]: confirmation }));
     setStep(idx, "done");
     advance(idx);
+  }
+
+  function copyDraft(idx: number, d: NonNullable<ActionStep["draft"]>) {
+    const text = `To: ${d.to}\nSubject: ${d.subject}\n\n${d.body}`;
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(idx);
+    window.setTimeout(() => setCopied((c) => (c === idx ? null : c)), 1600);
   }
 
   function skipReviewStep() {
@@ -286,6 +327,10 @@ export function FlagCard({
             {flag.plan.map((step, i) => {
               const st = steps[i];
               const isReviewCurrent = phase === "review" && reviewIdx === i;
+              const isAwaiting = st === "awaiting";
+              // A decision needs the PM's input when it's the current review step
+              // or the auto-runner has paused on it.
+              const showDecide = !!step.decision && (isReviewCurrent || isAwaiting);
               return (
                 <div
                   key={step.id}
@@ -299,7 +344,7 @@ export function FlagCard({
                         : "border-emerald-200 bg-emerald-50/60"
                       : st === "running"
                       ? "border-brand-300 bg-brand-50"
-                      : isReviewCurrent
+                      : isReviewCurrent || isAwaiting
                       ? "border-brand-300 bg-white ring-1 ring-brand-200"
                       : "border-ink-200 bg-white"
                   )}
@@ -360,38 +405,107 @@ export function FlagCard({
                           {refining ? "Margin Agent is revising…" : "Executing…"}
                         </div>
                       )}
+
+                      {/* Hand-off: an artifact the agent can't send. It drafts
+                          it and gives the PM the copy-ready text to send. */}
+                      {step.draft && st !== "pending" && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() =>
+                              setOpenDrafts((o) => ({ ...o, [i]: !o[i] }))
+                            }
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                          >
+                            {openDrafts[i] ? (
+                              <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3" />
+                            )}
+                            <Mail className="h-3 w-3" />
+                            View the drafted {step.draft.kind} — yours to send
+                          </button>
+                          {openDrafts[i] && (
+                            <div className="mt-1.5 rounded-lg border border-ink-200 bg-white p-3">
+                              <div className="space-y-0.5 border-b border-ink-100 pb-2 text-[11px]">
+                                <div>
+                                  <span className="text-ink-400">To </span>
+                                  <span className="text-ink-600">{step.draft.to}</span>
+                                </div>
+                                <div>
+                                  <span className="text-ink-400">Subject </span>
+                                  <span className="font-medium text-ink-700">
+                                    {step.draft.subject}
+                                  </span>
+                                </div>
+                              </div>
+                              <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink-600">
+                                {step.draft.body}
+                              </pre>
+                              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-2.5">
+                                <button
+                                  onClick={() => copyDraft(i, step.draft!)}
+                                  className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] font-medium text-ink-600 transition-colors hover:border-brand-300 hover:text-brand-700"
+                                >
+                                  {copied === i ? (
+                                    <>
+                                      <Check className="h-3 w-3 text-emerald-600" /> Copied
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3 w-3" /> Copy
+                                    </>
+                                  )}
+                                </button>
+                                <span className="text-[10px] text-ink-400">
+                                  Margin Agent can&apos;t send for you — paste into
+                                  Procore or email to submit.
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {isReviewCurrent &&
-                    (step.decision ? (
-                      <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
-                        <p className="text-xs font-medium text-ink-700">
-                          {step.decision.question}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {step.decision.options.map((opt, oi) => (
-                            <button
-                              key={opt}
-                              onClick={() => chooseDecision(opt)}
-                              className={cn(
-                                "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                                oi === step.decision!.recommended
-                                  ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
-                                  : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
-                              )}
-                            >
-                              {opt}
-                              {oi === step.decision!.recommended && (
-                                <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
-                                  rec
-                                </span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
+                  {showDecide && (
+                    <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
+                      <p className="text-xs font-medium text-ink-700">
+                        {step.decision!.question}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {step.decision!.options.map((opt, oi) => (
+                          <button
+                            key={opt}
+                            onClick={() => decide(i, opt)}
+                            className={cn(
+                              "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                              oi === step.decision!.recommended
+                                ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                                : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                            )}
+                          >
+                            {opt}
+                            {oi === step.decision!.recommended && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
+                                rec
+                              </span>
+                            )}
+                          </button>
+                        ))}
                       </div>
-                    ) : (
+                      {isAwaiting && (
+                        <button
+                          onClick={turnAutonomous}
+                          className="text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                        >
+                          Or let it run the rest autonomously →
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {isReviewCurrent && !step.decision && (
                       <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
                         {step.targetsDollars > 0 && (
                           <label className="flex items-center gap-2 text-xs text-ink-500">
@@ -443,7 +557,7 @@ export function FlagCard({
                           </Button>
                         </div>
                       </div>
-                    ))}
+                  )}
                 </div>
               );
             })}
@@ -454,18 +568,26 @@ export function FlagCard({
         {phase === "proposed" && (
           <div className="mt-4">
             <div className="flex items-center gap-2">
-              <Button onClick={() => setPhase("review")} className="flex-1">
-                Step through
+              <Button onClick={approveAndRun} className="flex-1">
+                Approve &amp; run
               </Button>
-              <Button variant="secondary" onClick={approveAll} className="flex-1">
+              <Button variant="secondary" onClick={runAutonomously} className="flex-1">
                 Run autonomously
               </Button>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-              Step through to make the calls marked{" "}
-              <span className="font-medium text-brand-600">your call</span> — or let
-              Margin Agent run the plan and take the recommended call on each.
-            </p>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <p className="text-[11px] leading-relaxed text-ink-400">
+                Approve &amp; run executes step by step and stops at the calls
+                marked <span className="font-medium text-brand-600">your call</span>.
+                Run autonomously takes the recommended call on each.
+              </p>
+              <button
+                onClick={() => setPhase("review")}
+                className="shrink-0 text-[11px] font-medium text-brand-600 hover:text-brand-700"
+              >
+                Step through →
+              </button>
+            </div>
           </div>
         )}
 
@@ -475,7 +597,7 @@ export function FlagCard({
               Step {reviewIdx + 1} of {flag.plan.length} — make the calls that are yours.
             </p>
             <button
-              onClick={goAutonomous}
+              onClick={turnAutonomous}
               className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
             >
               Continue autonomously →
@@ -483,7 +605,14 @@ export function FlagCard({
           </div>
         )}
 
-        {phase === "executing" && (
+        {phase === "executing" && awaiting !== null && (
+          <p className="mt-3 text-xs font-medium text-brand-600">
+            Paused — your call above. Pick an option to continue, or hand the
+            rest off.
+          </p>
+        )}
+
+        {phase === "executing" && awaiting === null && (
           <div className="mt-4 flex items-center gap-2 text-sm text-brand-600">
             <Loader2 className="h-4 w-4 animate-spin" />
             Margin Agent is executing the plan…
@@ -560,6 +689,12 @@ function StepIcon({
     return (
       <div className="flex h-5 w-5 items-center justify-center rounded-full border border-ink-300 bg-ink-100 text-ink-400">
         <X className="h-3 w-3" />
+      </div>
+    );
+  if (state === "awaiting")
+    return (
+      <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-brand-400 bg-brand-50 text-[10px] font-semibold text-brand-600">
+        {idx + 1}
       </div>
     );
   return (

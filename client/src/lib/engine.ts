@@ -166,14 +166,29 @@ function buildPlan(
       },
       {
         id: "d-submit",
-        label: "Submit to the GC",
-        detail: "COR-008 is ready to send.",
+        label: "Hand off to the GC",
+        detail: "COR-008 and a cover note are assembled. I can't send it from the platform — it's yours to submit.",
         targetsDollars: 0,
         artifact: "",
         decision: {
-          question: `Submit COR-008 for ${kfmt(driverDollars)} now, or hold?`,
-          options: ["Submit now", "Hold for my review"],
+          question: `Give you the COR-008 draft (${kfmt(driverDollars)}) to send now, or hold for your review?`,
+          options: ["Give me the draft", "Hold for my review"],
           recommended: 0,
+        },
+        draft: {
+          kind: "email",
+          to: "GC project manager",
+          subject: `COR-008 — Job ${job.number} ${name} added scope (ASI-014)`,
+          body: `Hi [GC PM],
+
+Attached is COR-008 covering the added ${name.toLowerCase()} directed under ASI-014 (added receptacles, L3) and RFI-022.
+
+The change is limited to the change-tied labor, billed at the contract rate — $${driverDollars.toLocaleString()}. Labor backup and the ASI-014 narrative are included for your review.
+
+Let me know if you need anything else to process it.
+
+Thanks,
+[Your name] · Job ${job.number}`,
         },
       },
       {
@@ -230,9 +245,22 @@ function buildPlan(
       {
         id: "action",
         label: `Draft T&M tickets · ${code}`,
-        detail: "Drafted the tickets with daily-log backup and queued them for GC sign-off and billing.",
+        detail: "Drafted the tickets with daily-log backup and a cover note for GC sign-off. I can't submit them for you — they're ready to send.",
         targetsDollars: driverDollars,
-        artifact: `T&M tickets queued for Job ${job.number}`,
+        artifact: `T&M tickets drafted for Job ${job.number}`,
+        draft: {
+          kind: "email",
+          to: "GC project manager",
+          subject: `T&M tickets — Job ${job.number} ${name} (CO-003)`,
+          body: `Hi [GC PM],
+
+Submitting T&M tickets for billable ${name.toLowerCase()} performed under CO-003 that hadn't been captured yet — $${driverDollars.toLocaleString()} total, with daily-log backup attached.
+
+A few tickets are past the 30-day window; per the sign-off provision I've included a cover note on those. Happy to walk through any of them.
+
+Thanks,
+[Your name] · Job ${job.number}`,
+        },
       },
       {
         id: "budget",

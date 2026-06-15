@@ -25,9 +25,6 @@ export function Wordmark({
         <span className="block text-sm font-semibold tracking-tight text-maroon">
           Margin Agent
         </span>
-        <span className="block text-[11px] text-ink-400">
-          labor cost intelligence
-        </span>
       </span>
     </button>
   );

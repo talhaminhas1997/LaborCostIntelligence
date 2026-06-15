@@ -88,6 +88,15 @@ export interface ActionStep {
   artifact: string;
   /** Final step — writing the lesson back into the estimating benchmark (the loop). */
   feedsBenchmark?: boolean;
+  /** Present → this step produces an artifact that has to leave the platform
+   *  (an email / document to a third party). Margin Agent can't send it, so it
+   *  drafts it and hands it to the PM to send. The PM gets the copy-ready text. */
+  draft?: {
+    kind: "email" | "document";
+    to: string;
+    subject: string;
+    body: string;
+  };
   /** Present → this step is a PM decision point (a judgment only the human can
    *  make), not an autonomous agent action. The agent has already done the work
    *  to surface it; the PM just picks. `recommended` is the agent's default. */
