@@ -203,7 +203,7 @@ function FlaggedRow({
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[10px] font-medium",
-            resolved ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+            resolved ? "bg-emerald-100 text-emerald-700" : "bg-ink-100 text-ink-500"
           )}
         >
           {resolved ? "Risk mitigated" : KIND_LABEL[job.flag!.kind]}

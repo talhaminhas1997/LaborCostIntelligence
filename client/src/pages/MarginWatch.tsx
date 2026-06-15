@@ -43,7 +43,6 @@ export default function MarginWatch() {
         kind: "agent",
         text: `Morning. I forecast cost-at-completion for all ${PORTFOLIO_STATS.jobsMonitored} active jobs off Miter's live actuals and watch each for drift — surfacing only the few where margin is genuinely at risk. ${flagged.length} need you today; open one on the left for the drift and a plan to approve.`,
       },
-      { id: nextId(), kind: "overview" },
     ],
   }));
   const [activeId, setActiveId] = useState<string>(OVERVIEW);
@@ -256,6 +255,20 @@ export default function MarginWatch() {
           onBack={() => setMobilePane("board")}
         />
 
+        {/* Portfolio roll-up — pinned under the Overview header, not in the chat */}
+        {activeId === OVERVIEW && (
+          <div className="border-b border-ink-200 bg-white px-4 pt-4 sm:px-6">
+            <div className="mx-auto max-w-2xl pb-4">
+              <PortfolioRollup
+                flagged={flagged}
+                monitoring={monitoring}
+                calm={calm}
+                mitigated={protectedAmt}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="scroll-thin flex-1 overflow-y-auto bg-ink-50/40 px-4 py-5 sm:px-6">
           <div className="mx-auto max-w-2xl space-y-4">
             {entries.map((e) => (
@@ -271,14 +284,6 @@ export default function MarginWatch() {
                 {e.kind === "note" && <NoteBubble tone={e.tone} text={e.text} />}
                 {e.kind === "flag" && jobById(e.jobId) && (
                   <FlagCard job={jobById(e.jobId)!} onResolved={onResolved} />
-                )}
-                {e.kind === "overview" && (
-                  <PortfolioRollup
-                    flagged={flagged}
-                    monitoring={monitoring}
-                    calm={calm}
-                    mitigated={protectedAmt}
-                  />
                 )}
               </motion.div>
             ))}
