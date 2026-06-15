@@ -27,5 +27,5 @@ app.post("/api/chat", async (req, res) => {
 
 app.listen(PORT, () => {
   const mode = apiMode() === "live" ? "live Claude" : "deterministic fallback";
-  console.log(`[cubit] API on http://localhost:${PORT} (${mode})`);
+  console.log(`[lci] API on http://localhost:${PORT} (${mode})`);
 });

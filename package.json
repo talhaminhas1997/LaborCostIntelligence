@@ -1,8 +1,8 @@
 {
-  "name": "cubit",
+  "name": "labor-cost-intelligence",
   "version": "1.0.0",
   "private": true,
-  "description": "Cubit — the job-cost intelligence layer for construction.",
+  "description": "Labor Cost Intelligence — the job-cost intelligence layer for construction.",
   "scripts": {
     "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm --prefix server run dev",
