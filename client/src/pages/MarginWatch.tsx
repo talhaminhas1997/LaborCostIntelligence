@@ -420,7 +420,7 @@ export default function MarginWatch() {
           </div>
         )}
 
-        <div className="scroll-thin flex-1 overflow-y-auto bg-ink-50/40 px-4 py-5 sm:px-6">
+        <div className="scroll-thin flex-1 overflow-y-auto bg-neutral-50/40 px-4 py-5 sm:px-6">
           <div className="mx-auto max-w-2xl space-y-4">
             {entries.map((e) => (
               <motion.div
@@ -451,7 +451,7 @@ export default function MarginWatch() {
                   key={c}
                   onClick={() => send(c)}
                   disabled={sending}
-                  className="rounded-full border border-ink-200 bg-white px-3 py-1 text-xs text-ink-600 transition hover:border-brand-300 hover:text-brand-700 disabled:opacity-50"
+                  className="rounded-full border border-ink-200 bg-white px-3 py-1 text-xs text-ink-600 transition hover:border-ink-300 hover:text-maroon disabled:opacity-50"
                 >
                   {c}
                 </button>
@@ -472,7 +472,7 @@ export default function MarginWatch() {
                     ? `Ask about Job ${activeJob.number}…`
                     : "Ask Margin Agent about your portfolio…"
                 }
-                className="h-11 flex-1 rounded-lg border border-ink-200 bg-white px-4 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                className="h-11 flex-1 rounded-lg border border-ink-200 bg-white px-4 text-sm outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
               />
               <Button type="submit" size="icon" className="h-11 w-11" disabled={sending}>
                 <Send className="h-4 w-4" />
@@ -509,7 +509,7 @@ function ThreadHeader({
     return (
       <div className="flex items-center gap-2 border-b border-ink-200 bg-white px-3 py-3 sm:px-6">
         <Back />
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-maroon/5 text-maroon">
           <LayoutGrid className="h-4 w-4" />
         </div>
         <div>
@@ -575,7 +575,7 @@ function RollStat({
           tone === "danger"
             ? "text-rose-600"
             : tone === "brand"
-            ? "text-brand-600"
+            ? "text-maroon"
             : "text-ink-800"
         )}
       >
@@ -611,7 +611,7 @@ function PortfolioRollup({
         onClick={onToggle}
         className="flex w-full items-center gap-2 text-left"
       >
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-maroon/5 text-maroon">
           <BarChart3 className="h-4 w-4" />
         </div>
         <h3 className="text-sm font-semibold text-ink-900">Portfolio roll-up</h3>
@@ -682,7 +682,7 @@ function AgentBubble({ text }: { text: string }) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-brand-600 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-maroon px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
         {text}
       </div>
     </div>

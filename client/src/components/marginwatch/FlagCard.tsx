@@ -471,7 +471,7 @@ export function FlagCard({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] uppercase tracking-wide text-ink-400">Rank</div>
-          <div className="tabular text-sm font-semibold text-brand-600">
+          <div className="tabular text-sm font-semibold text-maroon">
             #{flag.rank}
           </div>
         </div>
@@ -522,7 +522,7 @@ export function FlagCard({
         {/* Cost-code drill-down — the forecast at the cost-code level */}
         <button
           onClick={() => setShowCodes((s) => !s)}
-          className="mt-3 flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+          className="mt-3 flex items-center gap-1 text-xs font-medium text-maroon hover:text-maroon/70"
         >
           {showCodes ? (
             <ChevronDown className="h-3.5 w-3.5" />
@@ -562,12 +562,12 @@ export function FlagCard({
                       ? "border-ink-200 bg-ink-50 opacity-60"
                       : st === "done"
                       ? step.feedsBenchmark
-                        ? "border-brand-200 bg-brand-50/70"
+                        ? "border-ink-200 bg-ink-50"
                         : "border-emerald-200 bg-emerald-50/60"
                       : st === "running"
-                      ? "border-brand-300 bg-brand-50"
+                      ? "border-ink-300 bg-ink-50"
                       : isReviewCurrent || isAwaiting
-                      ? "border-brand-300 bg-white ring-1 ring-brand-200"
+                      ? "border-ink-300 bg-white ring-1 ring-ink-200"
                       : "border-ink-200 bg-white"
                   )}
                 >
@@ -596,7 +596,7 @@ export function FlagCard({
                             {step.label}
                           </span>
                           {step.decision && st === "pending" && (
-                            <span className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-600">
+                            <span className="shrink-0 rounded-full border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-maroon">
                               your call
                             </span>
                           )}
@@ -624,7 +624,7 @@ export function FlagCard({
                             st === "skipped"
                               ? "text-ink-400"
                               : step.feedsBenchmark
-                              ? "text-brand-600"
+                              ? "text-maroon"
                               : "text-emerald-600"
                           )}
                         >
@@ -635,7 +635,7 @@ export function FlagCard({
                         </div>
                       )}
                       {st === "running" && (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-brand-600">
+                        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-maroon">
                           {refining && <Loader2 className="h-3 w-3 animate-spin" />}
                           {refining ? "Margin Agent is revising…" : "Executing…"}
                         </div>
@@ -649,7 +649,7 @@ export function FlagCard({
                             onClick={() =>
                               setOpenDrafts((o) => ({ ...o, [i]: !o[i] }))
                             }
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-maroon hover:text-maroon/70"
                           >
                             {openDrafts[i] ? (
                               <ChevronDown className="h-3 w-3" />
@@ -682,7 +682,7 @@ export function FlagCard({
                               <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-2.5">
                                 <button
                                   onClick={() => copyDraft(i, step.draft!)}
-                                  className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] font-medium text-ink-600 transition-colors hover:border-brand-300 hover:text-brand-700"
+                                  className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] font-medium text-ink-600 transition-colors hover:border-ink-300 hover:text-maroon"
                                 >
                                   {copied === i ? (
                                     <>
@@ -709,7 +709,7 @@ export function FlagCard({
                       {st !== "skipped" && (
                         <button
                           onClick={() => toggleChat(i)}
-                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-400 transition-colors hover:text-brand-600"
+                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-400 transition-colors hover:text-maroon"
                         >
                           <MessageSquare className="h-3 w-3" />
                           {chatOpen === i ? "Hide" : "Ask about this step"}
@@ -739,7 +739,7 @@ export function FlagCard({
                                 className={cn(
                                   "max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
                                   m.role === "user"
-                                    ? "bg-brand-500 text-white"
+                                    ? "bg-ink-500 text-white"
                                     : "border border-ink-200 bg-white text-ink-700"
                                 )}
                               >
@@ -770,12 +770,12 @@ export function FlagCard({
                             if (e.key === "Enter") sendStepChat(i);
                           }}
                           placeholder="Ask about this step…"
-                          className="h-8 flex-1 rounded-md border border-ink-200 bg-white px-2.5 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                          className="h-8 flex-1 rounded-md border border-ink-200 bg-white px-2.5 text-xs outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
                         />
                         <button
                           onClick={() => sendStepChat(i)}
                           disabled={chatBusy === i || !(chatDraft[i] || "").trim()}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ink-500 text-white transition-colors hover:bg-maroon/90 disabled:opacity-40"
                         >
                           <Send className="h-3.5 w-3.5" />
                         </button>
@@ -797,20 +797,20 @@ export function FlagCard({
                               "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
                               splitDraft?.decisionIdx === i &&
                                 splitDraft?.optionIndex === oi
-                                ? "border-brand-400 bg-brand-100 text-brand-700 ring-1 ring-brand-200"
+                                ? "border-maroon/40 bg-ink-100 text-maroon ring-1 ring-ink-200"
                                 : oi === step.decision!.recommended
-                                ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                                ? "border-ink-300 bg-ink-50 text-maroon hover:bg-ink-100"
                                 : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
                             )}
                           >
                             {opt}
                             {step.decision!.adjust?.[oi] && (
-                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
                                 set %
                               </span>
                             )}
                             {oi === step.decision!.recommended && (
-                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
                                 rec
                               </span>
                             )}
@@ -825,12 +825,12 @@ export function FlagCard({
                           if (!t) return null;
                           const billed = Math.round((t.full * splitDraft.pct) / 100);
                           return (
-                            <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+                            <div className="rounded-lg border border-ink-200 bg-ink-50 p-3">
                               <div className="flex items-center justify-between text-xs">
                                 <span className="font-medium text-ink-700">
                                   Billable share of the {usdK(t.full)} overage
                                 </span>
-                                <span className="tabular font-semibold text-brand-700">
+                                <span className="tabular font-semibold text-maroon">
                                   {splitDraft.pct}%
                                 </span>
                               </div>
@@ -845,7 +845,7 @@ export function FlagCard({
                                     s ? { ...s, pct: Number(e.target.value) } : s
                                   )
                                 }
-                                className="mt-2 w-full accent-brand-600"
+                                className="mt-2 w-full accent-maroon"
                               />
                               <div className="tabular mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
                                 <span>
@@ -880,7 +880,7 @@ export function FlagCard({
                       {isAwaiting && (
                         <button
                           onClick={turnAutonomous}
-                          className="text-[11px] font-medium text-brand-600 hover:text-brand-700"
+                          className="text-[11px] font-medium text-maroon hover:text-maroon/70"
                         >
                           Or let it run the rest autonomously →
                         </button>
@@ -893,8 +893,8 @@ export function FlagCard({
                       {previews[i] != null ? (
                         // The revised step the agent will now take — confirm or keep editing.
                         <div className="space-y-2.5">
-                          <div className="rounded-lg border border-brand-200 bg-brand-50/70 p-2.5">
-                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+                          <div className="rounded-lg border border-ink-200 bg-ink-50 p-2.5">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-maroon">
                               <PenLine className="h-3 w-3" /> Revised step — what it&apos;ll
                               now do
                             </div>
@@ -958,7 +958,7 @@ export function FlagCard({
                               if (e.key === "Enter") approveReviewStep();
                             }}
                             placeholder="Adjust this step or tell Margin Agent how (optional)…"
-                            className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                            className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
                           />
                           <div className="flex flex-wrap items-center gap-2">
                             <Button size="sm" onClick={approveReviewStep} disabled={refining}>
@@ -1037,7 +1037,7 @@ export function FlagCard({
             <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
               <span className="font-medium text-ink-600">Just keep me in the loop</span>{" "}
               runs the plan and pauses only on the calls marked{" "}
-              <span className="font-medium text-brand-600">your call</span> — the
+              <span className="font-medium text-maroon">your call</span> — the
               balance between approving every step and letting it run on its own.
             </p>
           </div>
@@ -1050,7 +1050,7 @@ export function FlagCard({
             </p>
             <button
               onClick={turnAutonomous}
-              className="inline-flex items-center gap-1 rounded-md border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100"
+              className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-ink-50 px-2.5 py-1 text-xs font-medium text-maroon transition-colors hover:bg-ink-100"
             >
               Continue autonomously →
             </button>
@@ -1058,14 +1058,14 @@ export function FlagCard({
         )}
 
         {phase === "executing" && awaiting !== null && (
-          <p className="mt-3 text-xs font-medium text-brand-600">
+          <p className="mt-3 text-xs font-medium text-maroon">
             Paused — your call above. Pick an option to continue, or hand the
             rest off.
           </p>
         )}
 
         {phase === "executing" && awaiting === null && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-brand-600">
+          <div className="mt-4 flex items-center gap-2 text-sm text-maroon">
             <Loader2 className="h-4 w-4 animate-spin" />
             Margin Agent is executing the plan…
           </div>
@@ -1125,7 +1125,7 @@ function StepIcon({
       <div
         className={cn(
           "flex h-5 w-5 items-center justify-center rounded-full text-white",
-          loop ? "bg-brand-500" : "bg-emerald-500"
+          loop ? "bg-ink-500" : "bg-emerald-500"
         )}
       >
         {loop ? <RefreshCw className="h-3 w-3" /> : <Check className="h-3 w-3" />}
@@ -1133,7 +1133,7 @@ function StepIcon({
     );
   if (state === "running")
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-ink-500 text-white">
         <Loader2 className="h-3 w-3 animate-spin" />
       </div>
     );
@@ -1145,7 +1145,7 @@ function StepIcon({
     );
   if (state === "awaiting")
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-brand-400 bg-brand-50 text-[10px] font-semibold text-brand-600">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-maroon/40 bg-ink-50 text-[10px] font-semibold text-maroon">
         {idx + 1}
       </div>
     );
@@ -1154,7 +1154,7 @@ function StepIcon({
       className={cn(
         "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
         decision
-          ? "border-brand-300 text-brand-600"
+          ? "border-ink-300 text-maroon"
           : "border-ink-300 text-ink-400"
       )}
     >
@@ -1210,7 +1210,7 @@ function Metric({
           tone === "danger"
             ? "text-rose-600"
             : tone === "brand"
-            ? "text-brand-600"
+            ? "text-maroon"
             : "text-ink-700"
         )}
       >
