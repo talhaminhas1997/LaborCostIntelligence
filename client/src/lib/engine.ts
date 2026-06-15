@@ -156,11 +156,16 @@ function buildPlan(
         targetsDollars: 0,
         artifact: "",
         decision: {
-          question: "Owner-directed added scope — billable?",
-          options: ["Yes — billable", "Partly", "No — our productivity"],
+          question: "Is the overage owner-directed added scope, or our own labor overrun?",
+          options: [
+            "Owner-directed — billable",
+            "Partly billable",
+            "Our overrun — we absorb it",
+          ],
           recommended: 0,
-          // "No — our productivity" → not billable: drop the change order and the
-          // GC hand-off; the plan collapses to brief + reforecast + fix-the-estimate.
+          // "Our overrun — we absorb it" → not billable (same scope, just more
+          // hours than budgeted): drop the change order and the GC hand-off; the
+          // plan collapses to brief + reforecast + fix-the-estimate.
           skips: { 2: ["action", "d-submit"] },
         },
         systems: [{ name: "Procore", mode: "read", note: "ASI-014 / RFI-022 · notice window" }],
