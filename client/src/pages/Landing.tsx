@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, animate, useInView } from "framer-motion";
-import { ArrowRight, Radar } from "lucide-react";
+import {
+  motion,
+  AnimatePresence,
+  animate,
+  useInView,
+  useReducedMotion,
+} from "framer-motion";
+import { ArrowRight, Radar, HardHat, Activity } from "lucide-react";
 import { Wordmark, DISCLAIMER } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { navigate } from "@/App";
@@ -14,18 +20,30 @@ const fadeUp = {
 
 /* ---- Section 2 data: inputs → agent → value ---- */
 const INPUTS = [
-  { label: "Miter Payroll & Labor", live: true },
-  { label: "Job budgets & cost codes", live: true },
-  { label: "Procore / PMS — progress & change orders", live: false },
-  { label: "Schedule / % complete (Procore / PMS)", live: false },
-  { label: "Sage / Foundation ERP", live: false },
-  { label: "Field time tracking", live: false },
+  { label: "Labor cost & hours, by cost code (Miter)", live: true },
+  {
+    label: "Job budgets & cost codes / SOV (Miter; import from Sage, Foundation)",
+    live: true,
+  },
+  { label: "% complete / progress (Procore, Autodesk Build)", live: false },
+  { label: "Committed costs & change orders (Procore, Sage 300 CRE)", live: false },
+  { label: "ERP / GL actuals (Sage 300 CRE, Viewpoint Vista)", live: false },
 ];
 
-const VALUE_TODAY = [
-  { label: "Margin protected on live jobs", desc: "Caught before closeout" },
-  { label: "Real-time cost control", desc: "Act while there's still time" },
-  { label: "Only what matters", desc: "Ranked by margin at risk" },
+/* Today's value, framed as jobs-to-be-done. */
+const JTBD = [
+  "Watches every job's cost so you don't have to",
+  "Surfaces only what needs your judgment",
+  "Does the multi-step fix on your say-so",
+];
+
+/* The live agent feed — actions tick in, newest on top. */
+const FEED = [
+  "Flagged Job 412 — rough-in 23% over, $86.9K at risk",
+  "Drafted change order → +3.1 margin pts",
+  "Surfaced Job 207 margin erosion → alerted PM",
+  "Caught under-billed T&M on Job 132 → $34K recovered",
+  "Reforecast Job 88 cost-to-complete → margin held",
 ];
 
 const VALUE_SOON = [
@@ -174,27 +192,28 @@ export default function Landing() {
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-400">
                 Inputs
               </div>
-              <ul className="mt-5 space-y-3.5">
-                {INPUTS.map((inp) => (
-                  <li key={inp.label} className="flex items-center gap-2.5">
+              <ul className="mt-5 space-y-4">
+                {INPUTS.map((inp, i) => (
+                  <li key={inp.label} className="flex items-start gap-2.5">
                     <span
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      className={`signal-pulse mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                         inp.live ? "bg-brand-500" : "bg-ink-300"
                       }`}
+                      style={{ animationDelay: `${i * 0.4}s` }}
                     />
                     <span
-                      className={`text-sm ${
+                      className={`flex-1 text-sm leading-snug ${
                         inp.live ? "text-ink-800" : "text-ink-400"
                       }`}
                     >
                       {inp.label}
                     </span>
                     {inp.live ? (
-                      <span className="ml-auto text-[9px] font-semibold tracking-[0.15em] text-brand-600">
+                      <span className="mt-0.5 shrink-0 text-[9px] font-semibold tracking-[0.15em] text-brand-600">
                         LIVE
                       </span>
                     ) : (
-                      <span className="ml-auto rounded border border-ink-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-[0.15em] text-ink-400">
+                      <span className="mt-0.5 shrink-0 rounded border border-ink-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-[0.15em] text-ink-400">
                         SOON
                       </span>
                     )}
@@ -214,28 +233,26 @@ export default function Landing() {
 
             <Connector />
 
-            {/* WHAT YOU GET */}
+            {/* WHAT YOU GET — live agent feed */}
             <div className="rounded-2xl border border-ink-200 bg-white p-7">
-              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-400">
-                What you get
-              </div>
-
-              {/* TODAY — lit */}
-              <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+              {/* TODAY — lit, framed as jobs-to-be-done */}
+              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4">
                 <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                  <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
                   Today · Ops
                 </div>
-                <ul className="space-y-3">
-                  {VALUE_TODAY.map((v) => (
-                    <li key={v.label}>
-                      <div className="text-sm font-semibold text-maroon">
-                        {v.label}
-                      </div>
-                      <div className="text-xs text-ink-500">{v.desc}</div>
+                <ul className="space-y-2">
+                  {JTBD.map((j) => (
+                    <li
+                      key={j}
+                      className="flex items-start gap-2 text-sm font-medium text-maroon"
+                    >
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-500" />
+                      {j}
                     </li>
                   ))}
                 </ul>
+                <AgentFeed />
               </div>
 
               {/* SOON — dimmed */}
@@ -256,6 +273,9 @@ export default function Landing() {
               </div>
             </div>
           </motion.div>
+
+          {/* Scope: hold more without holding more stress */}
+          <ScopeBand />
         </div>
       </section>
 
@@ -392,16 +412,17 @@ export default function Landing() {
   );
 }
 
-/* ---- Connector arrow between the three panels (lg only) ---- */
+/* ---- Animated connector track: a signal flowing toward the agent (lg only) ---- */
 function Connector() {
   return (
-    <div className="hidden items-center justify-center lg:flex">
-      <ArrowRight className="h-5 w-5 text-ink-300" />
+    <div className="relative mx-auto hidden h-px w-12 lg:block">
+      <div className="absolute inset-0 top-1/2 h-px -translate-y-1/2 bg-ink-200" />
+      <span className="signal-flow absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-brand-500" />
     </div>
   );
 }
 
-/* ---- Minimal node-and-connector diagram with one glowing focal node ---- */
+/* ---- Always-on radar: sweeping line, concentric pulse, signals feeding in ---- */
 const SPOKES = [18, 74, 132, 200, 258, 312];
 function AgentDiagram() {
   return (
@@ -410,7 +431,14 @@ function AgentDiagram() {
         {/* concentric hairline rings */}
         <div className="absolute inset-0 rounded-full border border-ink-200" />
         <div className="absolute inset-[20%] rounded-full border border-dashed border-ink-200" />
-        {/* spokes + satellite nodes */}
+        <div className="absolute inset-[40%] rounded-full border border-ink-200" />
+        {/* rotating sweep */}
+        <div className="absolute inset-0 overflow-hidden rounded-full">
+          <div className="radar-sweep absolute inset-0 rounded-full" />
+        </div>
+        {/* concentric pulse rippling out */}
+        <div className="radar-ping absolute inset-0 rounded-full border border-brand-300/70" />
+        {/* spokes: satellite node (pulse) + inbound particle */}
         {SPOKES.map((deg, i) => (
           <div
             key={deg}
@@ -419,11 +447,14 @@ function AgentDiagram() {
           >
             <div className="h-px w-full bg-ink-200" />
             <span
-              className={`absolute right-0 top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full border ${
-                i < 2
-                  ? "border-brand-400 bg-brand-500"
-                  : "border-ink-300 bg-white"
+              className="signal-in absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-brand-500"
+              style={{ animationDelay: `${i * 0.45}s` }}
+            />
+            <span
+              className={`signal-pulse absolute right-0 top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rounded-full border ${
+                i < 2 ? "border-brand-400 bg-brand-500" : "border-ink-300 bg-white"
               }`}
+              style={{ animationDelay: `${i * 0.45}s` }}
             />
           </div>
         ))}
@@ -435,13 +466,160 @@ function AgentDiagram() {
         </div>
       </div>
       <div className="mt-5 text-center">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-maroon">
+        <div className="flex items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-maroon">
+          <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
           Cost Agent
         </div>
         <div className="mt-1 font-mono text-[11px] tracking-wide text-ink-400">
           monitor · surface · act
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---- Live agent feed: actions tick in, newest on top ---- */
+function AgentFeed() {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { margin: "-40px" });
+  const cursor = useRef(3);
+  const uid = useRef(3);
+  const [items, setItems] = useState(() =>
+    FEED.slice(0, 3).map((text, id) => ({ id, text }))
+  );
+
+  useEffect(() => {
+    if (reduce || !inView) return;
+    const t = window.setInterval(() => {
+      setItems((prev) => {
+        const text = FEED[cursor.current % FEED.length];
+        cursor.current += 1;
+        return [{ id: uid.current++, text }, ...prev].slice(0, 3);
+      });
+    }, 2600);
+    return () => window.clearInterval(t);
+  }, [reduce, inView]);
+
+  return (
+    <div ref={ref} className="mt-4 border-t border-brand-200/70 pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-brand-600">
+        <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
+        Live
+      </div>
+      <ul className="space-y-1.5">
+        <AnimatePresence initial={false}>
+          {items.map((item) => (
+            <motion.li
+              key={item.id}
+              layout
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              className="flex items-start gap-2 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5"
+            >
+              <Activity className="mt-0.5 h-3 w-3 shrink-0 text-brand-600" />
+              <span className="text-[11px] leading-snug text-ink-600">
+                {item.text}
+              </span>
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ul>
+    </div>
+  );
+}
+
+/* ---- Scope: one PM, five jobs alone vs thirty with the agent ---- */
+const SCOPE_TOTAL = 30;
+const SCOPE_LIT_ALONE = 5;
+
+function ScopeBand() {
+  return (
+    <div className="mt-24 border-t border-ink-200 pt-16 sm:mt-32 sm:pt-20">
+      <motion.h3
+        {...fadeUp}
+        className="text-center text-2xl font-extrabold tracking-[-0.02em] text-maroon sm:text-4xl"
+      >
+        Hold more without{" "}
+        <span className="text-brand-600">holding more stress.</span>
+      </motion.h3>
+      <div className="mt-12 grid gap-5 sm:grid-cols-2">
+        <ScopeCard state="alone" />
+        <ScopeCard state="agent" />
+      </div>
+      <p className="mx-auto mt-8 max-w-2xl text-center text-sm leading-relaxed text-ink-500">
+        One agent watching every job means your judgment runs thirty as calmly
+        as five.
+      </p>
+    </div>
+  );
+}
+
+function ScopeCard({ state }: { state: "alone" | "agent" }) {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const isAgent = state === "agent";
+
+  return (
+    <div
+      ref={ref}
+      className={`rounded-2xl border p-6 ${
+        isAgent ? "border-brand-200 bg-brand-50/40" : "border-ink-200 bg-white"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-maroon text-white">
+          <HardHat className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
+            {isAgent ? "With the agent" : "Alone"}
+          </div>
+          <div className="text-sm font-semibold text-maroon">
+            {isAgent ? "All 30 jobs watched" : "~5 you can really watch"}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-10 gap-1.5">
+        {Array.from({ length: SCOPE_TOTAL }).map((_, i) => {
+          if (!isAgent) {
+            return (
+              <span
+                key={i}
+                className={`aspect-square rounded-[3px] ${
+                  i < SCOPE_LIT_ALONE ? "bg-brand-500" : "bg-ink-100"
+                }`}
+              />
+            );
+          }
+          const lit = inView || reduce;
+          const delay = i < SCOPE_LIT_ALONE ? 0 : 0.3 + (i - SCOPE_LIT_ALONE) * 0.03;
+          return (
+            <motion.span
+              key={i}
+              className="aspect-square rounded-[3px]"
+              initial={{ backgroundColor: "#f1f5f9" }}
+              animate={{ backgroundColor: lit ? "#7c5cff" : "#f1f5f9" }}
+              transition={{ duration: 0.4, delay: reduce ? 0 : delay }}
+            />
+          );
+        })}
+      </div>
+
+      {isAgent && (
+        <div className="mt-5 flex items-center gap-2 rounded-lg border border-brand-200 bg-white px-3 py-2">
+          <span className="node-pulse relative flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white">
+            <Radar className="h-3.5 w-3.5" />
+          </span>
+          <span className="text-xs font-medium text-brand-700">
+            Cost Agent · watching all 30
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -107,6 +107,112 @@ input[type="number"] {
   }
 }
 
+/* ---- Always-on Cost Agent radar (Section 2) ---- */
+
+/* Continuous sweep line (brand purple), rotating over the radar face. */
+.radar-sweep {
+  background: conic-gradient(
+    from 0deg,
+    rgba(124, 92, 255, 0) 0deg,
+    rgba(124, 92, 255, 0) 288deg,
+    rgba(124, 92, 255, 0.05) 330deg,
+    rgba(105, 56, 239, 0.22) 356deg,
+    rgba(124, 92, 255, 0.42) 360deg
+  );
+  animation: radar-spin 4.5s linear infinite;
+}
+@keyframes radar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Faint concentric pulse rippling out from the center. */
+.radar-ping {
+  animation: radar-ping 3.4s ease-out infinite;
+}
+@keyframes radar-ping {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.5;
+  }
+  80%,
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Soft pulse for input / satellite nodes (transform-free so it is safe on
+   absolutely-positioned, already-transformed nodes). */
+.signal-pulse {
+  animation: signal-pulse 2.4s ease-in-out infinite;
+}
+@keyframes signal-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(105, 56, 239, 0);
+    opacity: 0.8;
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(105, 56, 239, 0.16);
+    opacity: 1;
+  }
+}
+
+/* Particle travelling inward along a radar spoke — a signal feeding the agent.
+   Lives inside an origin-left rotated spoke; left:0% is the center. */
+.signal-in {
+  animation: signal-in 2.6s linear infinite;
+}
+@keyframes signal-in {
+  0% {
+    left: 86%;
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    left: 4%;
+    opacity: 0;
+  }
+}
+
+/* Particle flowing along a connector track (left → right). */
+.signal-flow {
+  animation: signal-flow 2.6s linear infinite;
+}
+@keyframes signal-flow {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep,
+  .radar-ping,
+  .signal-pulse,
+  .signal-in,
+  .signal-flow {
+    animation: none;
+  }
+}
+
 /* Thin scrollbars in chat panes */
 .scroll-thin::-webkit-scrollbar {
   width: 8px;
