@@ -171,6 +171,10 @@ export default function MarginWatch() {
 
     if (job?.flag) {
       const f = job.flag;
+      if (/not.*billable|isn'?t.*billable|what if.*(scope|billable)|our productivity|inefficien/.test(s))
+        return `Then it's a productivity problem, not a recovery — no change order goes out. I'd flag the crew/sequence issue on ${f.costCode} ${f.costCodeName}, reforecast the margin at the true rate, and write it back so the next bid carries it.`;
+      if (/confiden|how.*sure|how.*know|trust/.test(s))
+        return `${cap(f.confidenceLabel)} confidence. The burn-rate forecast firms up as more of the job is booked, and you're ${Math.round(job.pctComplete * 100)}% in here. Acting now matters because ${f.weeksLeftToAct} weeks of work are still ahead — there's runway to bend the curve.`;
       if (/why.*(drift|over|driv)|what.*driv/.test(s))
         return `${f.why || f.summary} The driver is ${f.costCode} ${f.costCodeName} — ${f.overPct}% over, pulling projected margin from ${f.marginNow}% to ${f.marginAtCompletion}% if it's left alone.`;
       if (/walk.*(through|plan)|the plan|what.*step|steps?\b/.test(s)) {
@@ -183,8 +187,15 @@ export default function MarginWatch() {
         return `${cap(f.recoverability)} recoverability. ${f.why || f.summary} You've got ${f.weeksLeftToAct} weeks of work left to act while it's still recoverable.`;
     }
 
-    if (/worst|which job|biggest|top |priorit/.test(s)) {
-      const w = flagged[0];
+    if (job && !job.flag) {
+      if (/why.*not.*flag|why isn'?t|not flagged/.test(s))
+        return `Job ${job.number} is drifting but below the surfacing bar${job.driftNote ? ` — ${job.driftNote}` : " — the dollars at risk and time-to-act don't clear the threshold yet"}. Flagging it now would just be noise.`;
+      if (/what.*change|when.*flag|what.*trigger/.test(s))
+        return `It surfaces the moment the projected overrun clears the dollar threshold with enough job left to act on. I'm watching the burn rate and will flag it then.`;
+    }
+
+    if (/worst|which job|biggest|top |priorit|tackle first/.test(s)) {
+      const w = flagged.find((j) => !resolved.has(j.id)) || flagged[0];
       if (!w?.flag) return null;
       const f = w.flag;
       return `Job ${w.number} — ${w.name} is your worst exposure: ${f.costCodeName} ${f.overPct}% over, ${k(f.marginAtRisk)} at risk with ${f.weeksLeftToAct} weeks left to act. ${cap(f.recoverability)} recoverability — it's ${f.driverLabel.toLowerCase()}. It ranks #1 because it pairs the biggest dollars at risk with enough runway to actually recover. Open it and I'll walk the plan.`;
@@ -198,6 +209,29 @@ export default function MarginWatch() {
         )
         .join("\n");
       return `Across ${PORTFOLIO_STATS.jobsMonitored} active jobs, ${flagged.length} need you — about ${k(total)} at risk in total:\n${lines}\n\n${monitoring.length} more are drifting below the surfacing line; the other ${calm.length} are tracking on budget. The driver is labor-heavy cost codes burning hours faster than units convert.`;
+    }
+    if (/next.*worst|next.*job|what.*next/.test(s)) {
+      const n =
+        flagged.find((j) => !resolved.has(j.id) && j.id !== activeId) ||
+        flagged.find((j) => j.id !== activeId);
+      if (!n?.flag) return `That clears everything that needs you — the rest are tracking on budget.`;
+      const nf = n.flag;
+      return `Next is Job ${n.number} — ${n.name}: ${nf.costCodeName} ${nf.overPct}% over, ${k(nf.marginAtRisk)} at risk, ${cap(nf.recoverability)} recoverability. Open it from the board when you're ready and I'll walk the plan.`;
+    }
+    if (/protect|mitigat|how much.*(saved|actioned|done|protect)/.test(s)) {
+      const doneN = resolved.size;
+      const left = flagged.filter((j) => !resolved.has(j.id)).length;
+      return `You've actioned ${usd(protectedAmt)} across ${doneN} job${doneN === 1 ? "" : "s"} so far. ${left > 0 ? `${left} still need you.` : "That clears every job flagged today."}`;
+    }
+    if (/(drift|over).*(not.*flag|below|watch)|not flagged|what.*watch|monitor/.test(s)) {
+      if (!monitoring.length) return `Nothing's drifting below the line right now — everything's either flagged or on budget.`;
+      const lines = monitoring
+        .map((j) => `• Job ${j.number} — ${Math.round(j.pctComplete * 100)}% in${j.driftNote ? `, ${j.driftNote}` : ""}`)
+        .join("\n");
+      return `${monitoring.length} are drifting but below the surfacing bar:\n${lines}\nI'm watching them and will surface a plan the moment one clears the threshold.`;
+    }
+    if (/why.*(flag|these|surfac)|criteria|how.*decide/.test(s)) {
+      return `I score every drifting job by dollars at risk × how confident the forecast is × how much runway you have to act — then surface only what clears the bar. ${flagged.length} cleared it today; ${monitoring.length} are drifting below the line, and ${calm.length} are tracking on budget.`;
     }
     return null;
   }
