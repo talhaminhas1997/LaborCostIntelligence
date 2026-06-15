@@ -117,6 +117,11 @@ export interface ActionStep {
      *  change-order + GC hand-off; "Actually added scope" keeps a recovery letter
      *  that's otherwise skipped. Keyed by option index. */
     skips?: Record<number, string[]>;
+    /** Re-pricing: choosing option index `i` overrides a downstream financial
+     *  step's targeted $ — e.g. "Partly billable" bills only the change-tied
+     *  slice on the change order and leaves the rest to be absorbed. Keyed by
+     *  option index. */
+    adjust?: Record<number, { stepId: string; targetsDollars: number }[]>;
   };
 }
 

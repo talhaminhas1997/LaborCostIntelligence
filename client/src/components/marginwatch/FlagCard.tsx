@@ -119,6 +119,22 @@ export function FlagCard({
     });
   }
 
+  // A decision can also re-price a downstream financial step (e.g. "Partly
+  // billable" bills only the change-tied slice on the change order). We write the
+  // override into the same amounts state the manual edit uses, so the "targets $"
+  // chip, the executed amount, and the recovered total all follow.
+  function applyAdjust(decisionIdx: number, optionIndex: number) {
+    const adj = flag.plan[decisionIdx].decision?.adjust?.[optionIndex];
+    if (!adj?.length) return;
+    adj.forEach(({ stepId, targetsDollars }) => {
+      const j = flag.plan.findIndex((p) => p.id === stepId);
+      if (j > decisionIdx) {
+        amountsRef.current[j] = targetsDollars;
+        setAmounts((a) => ({ ...a, [j]: targetsDollars }));
+      }
+    });
+  }
+
   // The auto-runner: agent steps execute on their own; at a decision step it
   // PAUSES for the PM's call — unless autonomous mode is on, in which case it
   // takes the agent's recommended call and keeps going (like Claude does).
@@ -149,6 +165,7 @@ export function FlagCard({
           [idx]: `→ ${step.decision!.options[rec]}`,
         }));
         applySkips(idx, rec); // autonomous mode takes the recommended branch
+        applyAdjust(idx, rec);
       }
       setStep(idx, "done");
       window.setTimeout(() => runAuto(idx + 1), 300);
@@ -175,6 +192,7 @@ export function FlagCard({
     setConfirms((c) => ({ ...c, [idx]: `→ ${optionText}` }));
     setStep(idx, "done");
     applySkips(idx, optionIndex); // reshape the plan to the PM's call
+    applyAdjust(idx, optionIndex); // re-price the financial step if needed
     if (awaiting === idx) {
       setAwaiting(null);
       window.setTimeout(() => runAuto(idx + 1), 300);

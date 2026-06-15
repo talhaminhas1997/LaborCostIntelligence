@@ -131,6 +131,9 @@ function buildPlan(
   // The financial action targets the driver cost code's projected overrun — a
   // real figure (overrun hours × blended rate), not an invented "recovered" cut.
   const driverDollars = round(Math.max(0, driver.overrunHours) * driver.rate, 100);
+  // "Partly billable" splits the overage: bill the change-tied slice (~60% here,
+  // a typical owner-directed vs. our-own-pace split), absorb the rest.
+  const partialDollars = round(driverDollars * 0.6, 100);
   const kfmt = (n: number) => `$${Math.round(n / 1000)}K`;
 
   // Each plan is agent-deterministic on the data, human-gated on judgment: the
@@ -167,6 +170,9 @@ function buildPlan(
           // hours than budgeted): drop the change order and the GC hand-off; the
           // plan collapses to brief + reforecast + fix-the-estimate.
           skips: { 2: ["action", "d-submit"] },
+          // "Partly billable" → keep the COR + hand-off, but bill only the
+          // change-tied slice; the balance is absorbed in the reforecast.
+          adjust: { 1: [{ stepId: "action", targetsDollars: partialDollars }] },
         },
         systems: [{ name: "Procore", mode: "read", note: "ASI-014 / RFI-022 · notice window" }],
       },
@@ -185,7 +191,7 @@ function buildPlan(
         targetsDollars: 0,
         artifact: "",
         decision: {
-          question: `Give you the COR-008 draft (${kfmt(driverDollars)}) to send now, or hold for your review?`,
+          question: `Give you the COR-008 draft to send now, or hold for your review?`,
           options: ["Give me the draft", "Hold for my review"],
           recommended: 0,
         },
@@ -198,7 +204,7 @@ function buildPlan(
 
 Attached is COR-008 covering the added ${name.toLowerCase()} directed under ASI-014 (added receptacles, L3) and RFI-022.
 
-The change is limited to the change-tied labor, billed at the contract rate — $${driverDollars.toLocaleString()}. Labor backup and the ASI-014 narrative are included for your review.
+The change is limited to the change-tied labor, billed at the contract rate; the priced labor delta and backup are in the attached COR, along with the ASI-014 narrative for your review.
 
 Let me know if you need anything else to process it.
 
@@ -220,7 +226,7 @@ Thanks,
           subject: `Job ${job.number} — ${name} (${code}) variance + go-forward`,
           body: `Team,
 
-Quick heads-up on Job ${job.number}. ${name} (${code}) is tracking ~${overPct}% over the as-bid rate — the overage traces to ASI-014 / RFI-022, so it's added scope we're pursuing on a COR (~$${driverDollars.toLocaleString()}).
+Quick heads-up on Job ${job.number}. ${name} (${code}) is tracking ~${overPct}% over the as-bid rate — the overage traces to ASI-014 / RFI-022, so we're pursuing the change-tied portion on a COR.
 
 Two asks going forward:
 1. Any further ASI-directed work on ${code} goes on a T&M ticket the same day — we don't absorb directed changes.
