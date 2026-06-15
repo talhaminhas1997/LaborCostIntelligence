@@ -9,12 +9,15 @@ import {
   GraduationCap,
   FileText,
   TrendingDown,
+  AlertTriangle,
+  Check,
 } from "lucide-react";
 import { Wordmark, Logo, DISCLAIMER } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/primitives";
 import { navigate } from "@/App";
-import { usd } from "@/lib/utils";
+import { usd, usdK } from "@/lib/utils";
+import { flaggedJobs, calmJobs } from "@/lib/seed";
 
 const fadeUp = {
   initial: { opacity: 0, y: 16 },
@@ -298,45 +301,89 @@ export default function Landing() {
 
 /* ---- Hero teaser: a calm portfolio with one job lighting up ---- */
 function PortfolioTeaser() {
+  const flag = flaggedJobs()[0];
+  const quiet = calmJobs().slice(0, 3);
   return (
-    <div className="rounded-2xl border border-ink-200 bg-white p-5 shadow-lift">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-medium text-ink-700">
-          <Logo className="h-4 w-4" /> Margin Watch
+    <div className="mx-auto max-w-2xl rounded-2xl border border-ink-200 bg-white p-4 shadow-lift sm:p-5">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between border-b border-ink-100 pb-3">
+        <div className="flex items-center gap-2">
+          <Logo className="h-4 w-4" />
+          <span className="text-sm font-semibold text-ink-800">Margin Watch</span>
+          <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> live
+          </span>
         </div>
         <span className="tabular text-xs text-ink-500">
-          {usd(214000)} margin protected · 16 jobs monitored
+          {usd(214000)} protected · 16 jobs monitored
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-        {Array.from({ length: 16 }).map((_, i) => {
-          const flagged = i === 2;
-          return (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 + i * 0.03 }}
-              className={`relative aspect-square rounded-lg border ${
-                flagged
-                  ? "border-brand-400 bg-brand-50"
-                  : "border-ink-200 bg-ink-50"
-              }`}
-            >
-              {flagged && (
-                <motion.span
-                  className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500"
-                  animate={{ opacity: [1, 0.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 1.6 }}
-                />
-              )}
-            </motion.div>
-          );
-        })}
+
+      {/* The one that needs you */}
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+        Needs you
       </div>
-      <p className="mt-4 text-xs text-ink-500">
-        15 jobs tracking on budget. 1 needs you — flagged, ranked, with a plan
-        ready to approve.
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2.5"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-ink-800">
+              Job {flag.number} · {flag.name}
+            </div>
+            <div className="truncate text-xs text-ink-500">
+              {flag.flag!.costCodeName} {flag.flag!.overPct}% over budget
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="tabular text-sm font-semibold text-rose-600">
+            {usdK(flag.flag!.marginAtRisk)} at risk
+          </span>
+          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+            Plan ready
+          </span>
+        </div>
+      </motion.div>
+
+      {/* The quiet majority */}
+      <div className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-emerald-600">
+        On budget
+      </div>
+      <div className="space-y-1">
+        {quiet.map((job, i) => (
+          <motion.div
+            key={job.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 + i * 0.08 }}
+            className="flex items-center justify-between rounded-md px-2 py-1.5"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <Check className="h-2.5 w-2.5" />
+              </span>
+              <span className="truncate text-xs text-ink-600">
+                Job {job.number} · {job.name}
+              </span>
+            </div>
+            <span className="tabular shrink-0 text-[11px] text-ink-400">
+              on budget
+            </span>
+          </motion.div>
+        ))}
+        <div className="px-2 pt-0.5 text-[11px] text-ink-400">+ 12 more tracking on budget</div>
+      </div>
+
+      <p className="mt-4 border-t border-ink-100 pt-3 text-xs text-ink-500">
+        Most jobs sit quiet. Cubit surfaces only the few that need you — ranked by
+        margin at risk, each with a plan ready to approve.
       </p>
     </div>
   );
