@@ -107,7 +107,7 @@ input[type="number"] {
   }
 }
 
-/* ---- Always-on Cost Agent radar (Section 2) ---- */
+/* ---- Always-on Margin Agent radar (Section 2) ---- */
 
 /* Continuous sweep line (brand purple), rotating over the radar face. */
 .radar-sweep {
