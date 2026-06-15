@@ -54,7 +54,7 @@ export function JobBoard({
       {/* Header + tally */}
       <div className="border-b border-ink-200 px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-maroon/5 text-maroon">
             <ShieldCheck className="h-4 w-4" />
           </div>
           <h3 className="text-sm font-semibold text-maroon">Job board</h3>
@@ -64,7 +64,7 @@ export function JobBoard({
         </p>
         <div className="mt-2.5 flex items-center gap-3 text-xs">
           <div>
-            <span className="tabular font-semibold text-brand-600">
+            <span className="tabular font-semibold text-maroon">
               {usd(protectedAmt)}
             </span>
             <span className="text-ink-400"> acted on</span>
@@ -84,7 +84,7 @@ export function JobBoard({
           className={cn(
             "mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors",
             activeThreadId === "overview"
-              ? "bg-brand-50 text-brand-700"
+              ? "bg-ink-100 text-maroon"
               : "text-ink-600 hover:bg-ink-100"
           )}
         >
@@ -239,8 +239,8 @@ function FlaggedRow({
       className={cn(
         "w-full rounded-lg border p-2.5 text-left transition-all",
         active
-          ? "border-brand-400 bg-brand-50 shadow-sm"
-          : "border-ink-200 bg-white hover:border-brand-300"
+          ? "border-maroon/40 bg-ink-50 shadow-sm"
+          : "border-ink-200 bg-white hover:border-ink-300"
       )}
     >
       <div className="flex items-center justify-between">

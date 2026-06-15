@@ -68,6 +68,14 @@ export function FlagCard({
   const [copied, setCopied] = useState<number | null>(null);
   // The decision step the auto-runner is paused on, awaiting the PM's call.
   const [awaiting, setAwaiting] = useState<number | null>(null);
+  // "Partly billable" → the PM sets the billable split before it's applied.
+  // Holds the decision step + chosen option + the live % the PM is dialing in.
+  const [splitDraft, setSplitDraft] = useState<{
+    decisionIdx: number;
+    optionIndex: number;
+    optionText: string;
+    pct: number;
+  } | null>(null);
   // Refs mirror amounts/skips so the actioned $ can be read synchronously at finish.
   const amountsRef = useRef<Record<number, number>>({});
   const skippedRef = useRef<Set<number>>(new Set());
@@ -198,6 +206,52 @@ export function FlagCard({
       window.setTimeout(() => runAuto(idx + 1), 300);
     } else {
       advance(idx); // step-through (review) path
+    }
+  }
+
+  // The financial step a decision option re-prices, plus its full (100%) $.
+  function adjustTarget(decisionIdx: number, optionIndex: number) {
+    const adj = flag.plan[decisionIdx].decision?.adjust?.[optionIndex]?.[0];
+    if (!adj) return null;
+    const stepIdx = flag.plan.findIndex((p) => p.id === adj.stepId);
+    if (stepIdx < 0) return null;
+    const full = flag.plan[stepIdx].targetsDollars;
+    return { stepIdx, full, defaultPct: Math.round((adj.targetsDollars / full) * 100) };
+  }
+
+  // Picking a split option (e.g. "Partly billable") opens the % control instead
+  // of deciding immediately — the PM dials in how much of the overage to bill.
+  function chooseOption(decisionIdx: number, optionIndex: number, optionText: string) {
+    if (refining) return;
+    const t = adjustTarget(decisionIdx, optionIndex);
+    if (t) {
+      setSplitDraft({ decisionIdx, optionIndex, optionText, pct: t.defaultPct });
+    } else {
+      decide(decisionIdx, optionText, optionIndex);
+    }
+  }
+
+  // Commit the PM's chosen split: re-price the financial step to that %, then
+  // continue exactly as decide() would (we set the amount ourselves, so this
+  // path doesn't call applyAdjust).
+  function confirmSplit() {
+    if (!splitDraft) return;
+    const { decisionIdx, optionIndex, optionText, pct } = splitDraft;
+    const t = adjustTarget(decisionIdx, optionIndex);
+    if (t) {
+      const amt = Math.round((t.full * pct) / 100);
+      amountsRef.current[t.stepIdx] = amt;
+      setAmounts((a) => ({ ...a, [t.stepIdx]: amt }));
+    }
+    setConfirms((c) => ({ ...c, [decisionIdx]: `→ ${optionText} · billing ${pct}%` }));
+    setStep(decisionIdx, "done");
+    applySkips(decisionIdx, optionIndex);
+    setSplitDraft(null);
+    if (awaiting === decisionIdx) {
+      setAwaiting(null);
+      window.setTimeout(() => runAuto(decisionIdx + 1), 300);
+    } else {
+      advance(decisionIdx);
     }
   }
 
@@ -738,15 +792,23 @@ export function FlagCard({
                         {step.decision!.options.map((opt, oi) => (
                           <button
                             key={opt}
-                            onClick={() => decide(i, opt, oi)}
+                            onClick={() => chooseOption(i, oi, opt)}
                             className={cn(
                               "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                              oi === step.decision!.recommended
+                              splitDraft?.decisionIdx === i &&
+                                splitDraft?.optionIndex === oi
+                                ? "border-brand-400 bg-brand-100 text-brand-700 ring-1 ring-brand-200"
+                                : oi === step.decision!.recommended
                                 ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
                                 : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
                             )}
                           >
                             {opt}
+                            {step.decision!.adjust?.[oi] && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
+                                set %
+                              </span>
+                            )}
                             {oi === step.decision!.recommended && (
                               <span className="ml-1.5 text-[10px] uppercase tracking-wide text-brand-400">
                                 rec
@@ -755,6 +817,66 @@ export function FlagCard({
                           </button>
                         ))}
                       </div>
+
+                      {/* Partial-bill control — the PM dials in the billable split */}
+                      {splitDraft?.decisionIdx === i &&
+                        (() => {
+                          const t = adjustTarget(i, splitDraft.optionIndex);
+                          if (!t) return null;
+                          const billed = Math.round((t.full * splitDraft.pct) / 100);
+                          return (
+                            <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-3">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-ink-700">
+                                  Billable share of the {usdK(t.full)} overage
+                                </span>
+                                <span className="tabular font-semibold text-brand-700">
+                                  {splitDraft.pct}%
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={splitDraft.pct}
+                                onChange={(e) =>
+                                  setSplitDraft((s) =>
+                                    s ? { ...s, pct: Number(e.target.value) } : s
+                                  )
+                                }
+                                className="mt-2 w-full accent-brand-600"
+                              />
+                              <div className="tabular mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
+                                <span>
+                                  Bill{" "}
+                                  <span className="font-semibold text-ink-700">
+                                    {usd(billed)}
+                                  </span>{" "}
+                                  on the COR
+                                </span>
+                                <span>
+                                  Absorb{" "}
+                                  <span className="font-medium text-rose-600">
+                                    {usd(t.full - billed)}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="mt-2.5 flex items-center gap-2">
+                                <Button size="sm" onClick={confirmSplit}>
+                                  Bill {splitDraft.pct}% · {usdK(billed)}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setSplitDraft(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       {isAwaiting && (
                         <button
                           onClick={turnAutonomous}
