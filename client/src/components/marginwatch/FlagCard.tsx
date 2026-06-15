@@ -9,12 +9,14 @@ import {
   ShieldCheck,
   RefreshCw,
   Database,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { chat } from "@/lib/api";
 import { cn, usd, usdK } from "@/lib/utils";
 import type { Job } from "@/lib/types";
 
-type StepState = "pending" | "running" | "done";
+type StepState = "pending" | "running" | "done" | "skipped";
 
 /**
  * Conversational flag card: the job-cost drift, the proposed multi-step plan,
@@ -34,12 +36,27 @@ export function FlagCard({
   );
   const [steps, setSteps] = useState<StepState[]>(flag.plan.map(() => "pending"));
   const [reviewIdx, setReviewIdx] = useState(0);
+  // Per-step review inputs and agent confirmations (Review-each path).
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [amounts, setAmounts] = useState<Record<number, number>>({});
+  const [confirms, setConfirms] = useState<Record<number, string>>({});
+  const [refining, setRefining] = useState(false);
+
+  const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+  const setStep = (idx: number, v: StepState) =>
+    setSteps((prev) => prev.map((s, i) => (i === idx ? v : s)));
+  const advance = (idx: number) => {
+    if (idx + 1 >= flag.plan.length) {
+      setPhase("done");
+      onResolved(job);
+    } else setReviewIdx(idx + 1);
+  };
 
   function runFrom(idx: number, onAllDone: () => void) {
     if (idx >= flag.plan.length) return onAllDone();
-    setSteps((prev) => prev.map((s, i) => (i === idx ? "running" : s)));
+    setStep(idx, "running");
     window.setTimeout(() => {
-      setSteps((prev) => prev.map((s, i) => (i === idx ? "done" : s)));
+      setStep(idx, "done");
       window.setTimeout(() => runFrom(idx + 1, onAllDone), 300);
     }, 780);
   }
@@ -52,19 +69,70 @@ export function FlagCard({
     });
   }
 
-  function approveReviewStep() {
+  async function approveReviewStep() {
+    if (refining) return;
     const idx = reviewIdx;
-    setSteps((prev) => prev.map((s, i) => (i === idx ? "running" : s)));
-    window.setTimeout(() => {
-      setSteps((prev) => prev.map((s, i) => (i === idx ? "done" : s)));
-      if (idx + 1 >= flag.plan.length) {
-        setPhase("done");
-        onResolved(job);
-      } else setReviewIdx(idx + 1);
-    }, 720);
+    const step = flag.plan[idx];
+    const note = (notes[idx] || "").trim();
+    const editedAmt = amounts[idx];
+    const amountChanged =
+      step.targetsDollars > 0 &&
+      editedAmt != null &&
+      Math.round(editedAmt) !== Math.round(step.targetsDollars);
+
+    setStep(idx, "running");
+    let confirmation = step.artifact;
+
+    if (note || amountChanged) {
+      setRefining(true);
+      try {
+        const instruction = `On Job ${job.number} (${flag.costCode} ${flag.costCodeName}), I'm reviewing the action step "${step.label}".${
+          amountChanged ? ` Change the amount to ${usd(editedAmt!)}.` : ""
+        }${note ? ` Instruction: ${note}.` : ""} Confirm in one short sentence exactly what you'll do for this step.`;
+        const { reply } = await chat([{ role: "user", content: instruction }], {
+          mode: "margin-watch",
+          jobContext: {
+            jobName: job.name,
+            jobNumber: job.number,
+            costCode: `${flag.costCode} ${flag.costCodeName}`,
+            step: step.label,
+          },
+        });
+        confirmation = reply?.trim() || confirmation;
+      } catch {
+        confirmation = `${amountChanged ? `Revised to ${usd(editedAmt!)}. ` : ""}${
+          note ? `Noted: ${note}` : confirmation
+        }`;
+      } finally {
+        setRefining(false);
+      }
+    } else {
+      await sleep(600);
+    }
+
+    setConfirms((c) => ({ ...c, [idx]: confirmation }));
+    setStep(idx, "done");
+    advance(idx);
+  }
+
+  function skipReviewStep() {
+    if (refining) return;
+    const idx = reviewIdx;
+    setConfirms((c) => ({ ...c, [idx]: "Skipped — not run." }));
+    setStep(idx, "skipped");
+    advance(idx);
   }
 
   const atStakePts = (flag.marginNow - flag.marginAtCompletion).toFixed(1);
+
+  // Outcome summary (reflects per-step edits/skips from the Review-each path).
+  const actionIdx = flag.plan.findIndex((p) => p.targetsDollars > 0);
+  const ranCount = steps.filter((s) => s === "done").length;
+  const skippedCount = steps.filter((s) => s === "skipped").length;
+  const actionRan = actionIdx >= 0 && steps[actionIdx] === "done";
+  const actionVerb = actionIdx >= 0 ? flag.plan[actionIdx].label.split(" · ")[0] : "";
+  const actionAmt =
+    actionIdx >= 0 ? amounts[actionIdx] ?? flag.plan[actionIdx].targetsDollars : 0;
 
   return (
     <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-soft">
@@ -158,8 +226,10 @@ export function FlagCard({
                 <div
                   key={step.id}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors",
-                    st === "done"
+                    "rounded-lg border px-3 py-2 transition-colors",
+                    st === "skipped"
+                      ? "border-ink-200 bg-ink-50 opacity-60"
+                      : st === "done"
                       ? step.feedsBenchmark
                         ? "border-brand-200 bg-brand-50/70"
                         : "border-emerald-200 bg-emerald-50/60"
@@ -170,42 +240,106 @@ export function FlagCard({
                       : "border-ink-200 bg-white"
                   )}
                 >
-                  <div className="mt-0.5">
-                    <StepIcon state={st} idx={i} loop={step.feedsBenchmark} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-ink-800">
-                        {step.label}
-                      </span>
-                      {step.targetsDollars > 0 && (
-                        <span className="tabular shrink-0 text-xs font-medium text-ink-500">
-                          targets {usdK(step.targetsDollars)}
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-0.5">
+                      <StepIcon state={st} idx={i} loop={step.feedsBenchmark} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-sm font-medium text-ink-800",
+                            st === "skipped" && "line-through"
+                          )}
+                        >
+                          {step.label}
                         </span>
+                        {step.targetsDollars > 0 && (
+                          <span className="tabular shrink-0 text-xs font-medium text-ink-500">
+                            targets {usdK(amounts[i] ?? step.targetsDollars)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-ink-500">{step.detail}</div>
+                      {(st === "done" || st === "skipped") && (
+                        <div
+                          className={cn(
+                            "mt-1 flex items-center gap-1 text-[11px] font-medium",
+                            st === "skipped"
+                              ? "text-ink-400"
+                              : step.feedsBenchmark
+                              ? "text-brand-600"
+                              : "text-emerald-600"
+                          )}
+                        >
+                          {st === "done" && step.feedsBenchmark && (
+                            <RefreshCw className="h-3 w-3" />
+                          )}
+                          {confirms[i] ?? step.artifact}
+                        </div>
+                      )}
+                      {st === "running" && (
+                        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-brand-600">
+                          {refining && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {refining ? "Cost Agent is revising…" : "Executing…"}
+                        </div>
                       )}
                     </div>
-                    <div className="text-xs text-ink-500">{step.detail}</div>
-                    {st === "done" && (
-                      <div
-                        className={cn(
-                          "mt-1 flex items-center gap-1 text-[11px] font-medium",
-                          step.feedsBenchmark ? "text-brand-600" : "text-emerald-600"
-                        )}
-                      >
-                        {step.feedsBenchmark && <RefreshCw className="h-3 w-3" />}
-                        {step.artifact}
-                      </div>
-                    )}
-                    {st === "running" && (
-                      <div className="mt-1 text-[11px] font-medium text-brand-600">
-                        Executing…
-                      </div>
-                    )}
                   </div>
+
                   {isReviewCurrent && (
-                    <Button size="sm" onClick={approveReviewStep}>
-                      Approve
-                    </Button>
+                    <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
+                      {step.targetsDollars > 0 && (
+                        <label className="flex items-center gap-2 text-xs text-ink-500">
+                          Amount
+                          <span className="flex items-center rounded-md border border-ink-200 bg-white px-2">
+                            <span className="text-ink-400">$</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={amounts[i] ?? Math.round(step.targetsDollars)}
+                              onChange={(e) =>
+                                setAmounts((a) => ({
+                                  ...a,
+                                  [i]: e.target.value === "" ? 0 : Number(e.target.value),
+                                }))
+                              }
+                              className="tabular h-7 w-28 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
+                            />
+                          </span>
+                        </label>
+                      )}
+                      <input
+                        value={notes[i] || ""}
+                        onChange={(e) =>
+                          setNotes((n) => ({ ...n, [i]: e.target.value }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") approveReviewStep();
+                        }}
+                        placeholder="Adjust this step or tell Cost Agent how (optional)…"
+                        className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={approveReviewStep} disabled={refining}>
+                          {refining ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Revising…
+                            </>
+                          ) : (
+                            "Approve & run"
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={skipReviewStep}
+                          disabled={refining}
+                        >
+                          Skip
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -227,7 +361,8 @@ export function FlagCard({
 
         {phase === "review" && (
           <p className="mt-3 text-xs text-ink-500">
-            Reviewing step {reviewIdx + 1} of {flag.plan.length} — approve to execute.
+            Reviewing step {reviewIdx + 1} of {flag.plan.length} — edit the amount,
+            add an instruction, then approve & run, or skip.
           </p>
         )}
 
@@ -253,8 +388,9 @@ export function FlagCard({
                   Risk mitigated on Job {job.number}
                 </div>
                 <div className="text-xs text-emerald-600">
-                  {flag.plan[0].label.split(" · ")[0]} for {usd(flag.driverAtRisk)} · margin
-                  reforecast · benchmark updated.
+                  {actionRan && `${actionVerb} for ${usd(actionAmt)} · `}
+                  {ranCount} of {flag.plan.length} steps run
+                  {skippedCount > 0 && ` · ${skippedCount} skipped`}.
                 </div>
               </div>
             </div>
@@ -299,6 +435,12 @@ function StepIcon({
     return (
       <div className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white">
         <Loader2 className="h-3 w-3 animate-spin" />
+      </div>
+    );
+  if (state === "skipped")
+    return (
+      <div className="flex h-5 w-5 items-center justify-center rounded-full border border-ink-300 bg-ink-100 text-ink-400">
+        <X className="h-3 w-3" />
       </div>
     );
   return (
