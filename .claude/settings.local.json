@@ -8,7 +8,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/app)",
       "Bash(curl -s -X POST http://localhost:3000/api/analyze -H \"Content-Type: application/json\" -d '{\"trade\":\"Electrical\",\"region\":\"Mountain West\",\"scope\":\"Commercial TI 18,000 sq ft, fire alarm tie-in, fast track\",\"phases\":[{\"name\":\"Rough-in\",\"hours\":1200},{\"name\":\"Panel/Service\",\"hours\":240},{\"name\":\"Finish/Devices\",\"hours\":880},{\"name\":\"Fire Alarm\",\"hours\":160}],\"blendedRate\":78}')",
       "Bash(curl -s -X POST http://localhost:3000/api/analyze -H \"Content-Type: application/json\" -d '{\"trade\":\"Concrete\",\"region\":\"Texas\",\"scope\":\"Slab on grade pour, simple warehouse\",\"phases\":[{\"name\":\"Formwork\",\"hours\":2000},{\"name\":\"Pour\",\"hours\":1800}],\"blendedRate\":65}')",
-      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('verdict:',d['verdict'],'| delta:',d['percentDelta'],'% | rec hrs:',d['recommended']['hours'],'| cost:',d['recommended']['cost']\\)\")"
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('verdict:',d['verdict'],'| delta:',d['percentDelta'],'% | rec hrs:',d['recommended']['hours'],'| cost:',d['recommended']['cost']\\)\")",
+      "Bash(uname -m && echo \"---\" && mkdir -p ~/bin && echo \"bin ready\")"
     ]
   }
 }

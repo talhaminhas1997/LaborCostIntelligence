@@ -1,103 +1,111 @@
 # Cubit
 
-**The labor cost intelligence layer for construction.**
+**The job-cost intelligence layer for construction.**
 
-Cubit lets a construction estimator validate their labor estimate against
-AI-reasoned, cross-contractor benchmarks **before they bid a job**. Drop in a
-trade, region, scope, and phase-by-phase hours, and Cubit pressure-tests the
-estimate — flagging which phases are light, where the rework gap is, and what a
-defensible labor number actually looks like.
+Cubit is a closed loop that protects margin on the jobs a contractor has already
+won — and then bids the next one smarter:
 
-> Prototype note: benchmark figures shown in the app are **illustrative**. The
-> production version is powered by live cross-contractor payroll data only a
-> system-of-record could have.
+> **Monitor → Surface (prioritized) → Approve → Act → Learn → Bid smarter**
+
+It watches every active job's labor cost in real time, surfaces only the few
+cost creeps that matter (ranked by margin-at-risk × confidence × time-left-to-act),
+and — on one human approval — takes multi-step action to protect the margin.
+Each resolved job writes a lesson back into the benchmarks, which sharpens the
+next bid.
+
+> Prototype note: all figures are **illustrative**. Production uses live
+> cross-contractor payroll data; v1 is single-tenant (the contractor's own job
+> history). The demo runs end-to-end with **no API key** — every endpoint has a
+> deterministic fallback and the monitoring view runs on seeded data.
+
+---
+
+## The two acts (demo at `/app`)
+
+**1. Margin Watch** (default) — an always-on, conversational agent monitoring the
+whole portfolio. Most jobs sit quiet; a few are flagged and ranked. Each flag is
+job-cost only (labor overrun, margin erosion, rework, under-recovery), shows the
+drifting cost code, the projected margin impact, and a **proposed multi-step
+plan** (draft change order → reforecast margin → alert PM → write back to
+benchmark). Approve all, or review each — the steps execute one-by-one and the
+margin recovers. Runs entirely on seeded, deterministic data.
+
+**2. Bid Co-pilot** — a chat-driven bid check. The right panel starts empty;
+describe a job (or load the sample / upload a takeoff) and Cubit extracts a
+phase-by-phase takeoff by cost code, then benchmarks it against actuals **learned
+from your jobs** — including the ones you just protected in Margin Watch. Edit
+any phase's hours and the analysis re-runs.
 
 ---
 
 ## Stack
 
-- **Next.js 14** (App Router) + **TypeScript** + **Tailwind CSS**
-- **Anthropic SDK** (`@anthropic-ai/sdk`) — all AI calls run **server-side only**
-  in the `/api/analyze` route, using model `claude-sonnet-4-6`.
-- No database, no auth. Deploys to **Vercel with zero config**.
+- **Frontend:** React + Vite + TypeScript, Tailwind CSS, shadcn-style UI,
+  Framer Motion (`client/`)
+- **API:** Express 5 + TypeScript, official Anthropic SDK (`server/`)
+- **Models:** `claude-3-5-haiku` for chat + extraction; `claude-sonnet-4-6` for
+  bid analysis and the agent's reasoning
+- No database, no auth. The monitoring view never hard-depends on the API.
 
-The app **always works**: if `ANTHROPIC_API_KEY` is missing or the model
-call/parse fails, the API route falls back to a deterministic local analysis
-that returns the same JSON shape, so the demo never shows a raw error.
+```
+client/   React + Vite app (landing + demo)
+  src/lib/engine.ts     cost-code projection + scoring + surfacing engine
+  src/lib/seed-data.ts  seeded portfolio (raw cost-code actuals) + learnings
+server/   Express API: /api/chat, /api/extract, /api/analyze (all with fallbacks)
+```
 
 ---
 
 ## Run locally
 
 ```bash
-npm install
+# install root + server + client deps
+npm run install:all
 
-# Optional but recommended — enables genuine AI-reasoned analysis.
-# Without it, the app uses the deterministic local fallback.
-cp .env.local.example .env.local
-# then edit .env.local and set:
-#   ANTHROPIC_API_KEY=sk-ant-...
+# (optional) turn on real Claude reasoning
+cp server/.env.example server/.env
+#   then edit server/.env and set ANTHROPIC_API_KEY=sk-ant-...
 
+# start API (:8787) and client (:5173) together
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open **http://localhost:5173**. The Vite dev server proxies `/api/*` to the
+Express server on `:8787`.
 
-- `/` — landing page
-- `/app` — the interactive estimate analyzer
-
----
-
-## Deploy to Vercel
-
-1. Push this repo to GitHub/GitLab/Bitbucket.
-2. In Vercel, **New Project → Import** the repo. No build configuration is
-   required — Vercel auto-detects Next.js.
-3. Add the environment variable in **Project → Settings → Environment
-   Variables**:
-
-   | Name                | Value          | Environments                     |
-   | ------------------- | -------------- | -------------------------------- |
-   | `ANTHROPIC_API_KEY` | `sk-ant-...`   | Production, Preview, Development |
-
-4. Deploy. (Or from the CLI: `vercel` then `vercel --prod`.)
-
-If you skip the env var, the deployment still works — it just uses the local
-fallback analysis instead of live model reasoning.
+Without a key, everything still works — the demo uses deterministic fallbacks.
 
 ---
 
-## How it works
+## API
 
-```
-/app (client form)
-   │  POST { trade, region, scope, phases[], blendedRate }
-   ▼
-/api/analyze (server, Node runtime)
-   │  ├─ ANTHROPIC_API_KEY present → claude-sonnet-4-6 → strict JSON
-   │  └─ missing / error / bad JSON → computeFallback() (deterministic)
-   ▼
-AnalyzeResult JSON  →  ResultsPanel renders verdict, per-phase bands,
-                       rework gap, recommended hours + cost, rationale.
+All endpoints accept JSON `POST` and **always** return a result (model output,
+or a deterministic fallback if the key is missing or the call fails).
+
+| Endpoint | Input | Output |
+| --- | --- | --- |
+| `/api/chat` | `{ messages, jobContext?, mode? }` | `{ reply }` |
+| `/api/extract` | `{ text }` or `{ fileBase64, mimeType }` | `{ trade, region, scope, phases:[{name,hours,costCode}], blendedRate }` |
+| `/api/analyze` | `{ trade, region, scope, phases[], blendedRate }` | `{ verdict, percentDelta, headline, phases[], reworkGap, recommended, rationale, confidence }` |
+
+---
+
+## Build
+
+```bash
+npm run build      # type-checks + builds server (dist/) and client (client/dist/)
+npm start          # serves the built API
 ```
 
-The model is instructed to reason genuinely from the actual scope text and
-numbers, so different inputs produce different, sensible results, and to return
-**only** valid JSON matching a fixed schema (see `lib/types.ts`). The route
-extracts and validates that JSON defensively before returning it.
+## Deploy
 
-## Project structure
+This is a two-process app (Vite static client + Express API), so it isn't a
+zero-config single-target deploy. Typical setup:
 
-```
-app/
-  layout.tsx            Root layout + metadata
-  page.tsx              Landing page
-  app/page.tsx          The interactive analyzer (client component)
-  api/analyze/route.ts  Server-side analysis (model + fallback)
-components/
-  Brand.tsx             Logo / wordmark
-  ResultsPanel.tsx      Results rendering
-lib/
-  types.ts              Shared request/result types
-  fallback.ts           Deterministic local analysis engine
-```
+- **Client:** build `client/` (`npm --prefix client run build`) and host
+  `client/dist` as a static site.
+- **API:** run the Express server (`npm --prefix server run build && npm --prefix server start`)
+  on any Node host, with `ANTHROPIC_API_KEY` set, and point the client's `/api`
+  calls at it.
+
+For local demos, `npm run dev` is all you need.
