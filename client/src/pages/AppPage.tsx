@@ -13,7 +13,7 @@ type View = "margin-watch" | "bid";
 
 export default function AppPage() {
   const [view, setView] = useState<View>("margin-watch");
-  // The loop: lessons resolved in Margin Watch feed the Bid Co-pilot's benchmarks.
+  // The loop: lessons resolved by the Cost Risk Agent feed the Bid Co-pilot's benchmarks.
   const [learnings, setLearnings] = useState<Learning[]>(SEED_LEARNINGS);
   const addLearning = (l: Learning) =>
     setLearnings((prev) =>
@@ -26,7 +26,7 @@ export default function AppPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Wordmark onClick={() => navigate("/")} />
 
-          {/* View toggle — Margin Watch is the default/first act */}
+          {/* View toggle — the Cost Risk Agent is the default/first act */}
           <div className="flex items-center rounded-xl border border-ink-200 bg-ink-100 p-1">
             <ToggleBtn
               active={view === "margin-watch"}

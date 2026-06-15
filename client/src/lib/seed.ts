@@ -2,7 +2,7 @@ import { buildPortfolio } from "./engine";
 import type { Job, Learning } from "./types";
 
 /**
- * Margin Watch runs on this seeded, deterministic portfolio. The engine turns
+ * The Cost Risk Agent runs on this seeded, deterministic portfolio. The engine turns
  * raw cost-code actuals into projections, scores them, and decides which few
  * jobs clear the surfacing threshold — nothing here depends on a live API.
  */

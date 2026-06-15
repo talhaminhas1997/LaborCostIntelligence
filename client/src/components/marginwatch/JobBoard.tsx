@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ShieldCheck, LayoutGrid } from "lucide-react";
+import { ShieldCheck, LayoutGrid, Check } from "lucide-react";
 import { cn, usd, usdK } from "@/lib/utils";
 import type { FlagKind, Job } from "@/lib/types";
 
@@ -160,18 +160,18 @@ export function JobBoard({
           </>
         )}
 
-        {/* On budget */}
-        <SectionLabel tone="success" title="On budget" sub="no action" />
-        <div className="space-y-0.5">
-          {calm.map((job) => (
-            <JobRow
-              key={job.id}
-              job={job}
-              active={activeThreadId === job.id}
-              dot="bg-emerald-400"
-              onClick={() => onSelectJob(job)}
-            />
-          ))}
+        {/* On budget — collapsed to a count. This is an attention feed: it only
+            lists jobs that need the ops team. Healthy jobs stay out of the way. */}
+        <div className="mt-4 flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <Check className="h-3 w-3" />
+          </span>
+          <span className="text-xs text-ink-500">
+            <span className="font-semibold text-emerald-700">
+              {calm.length} jobs on budget
+            </span>{" "}
+            · tracking inside labor budget, nothing to action
+          </span>
         </div>
       </div>
     </div>
