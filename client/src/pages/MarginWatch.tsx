@@ -63,7 +63,7 @@ export default function MarginWatch({
       {
         id: nextId(),
         kind: "agent",
-        text: `Morning. I'm watching ${PORTFOLIO_STATS.jobsMonitored} active jobs. Most are tracking on budget — I only surface the few where margin is genuinely at risk, ranked by exposure × confidence × time left to act. ${flagged.length} need you right now. Open one to see the drift and a plan ready to approve.`,
+        text: `Morning. I'm watching ${PORTFOLIO_STATS.jobsMonitored} active jobs. Most are tracking on budget — I only surface the few where margin is genuinely at risk, ranked by dollars at risk and time left to act. ${flagged.length} need you right now. Open one to see the drift and a plan ready to approve.`,
       },
       { id: nextId(), kind: "overview" },
     ],
@@ -71,9 +71,8 @@ export default function MarginWatch({
   const [activeId, setActiveId] = useState<string>(OVERVIEW);
 
   const [resolved, setResolved] = useState<Set<string>>(new Set());
-  const [protectedAmt, setProtectedAmt] = useState(
-    PORTFOLIO_STATS.marginProtectedBase
-  );
+  // Starts at $0 and grows only as you act — no invented baseline.
+  const [protectedAmt, setProtectedAmt] = useState(0);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -199,7 +198,7 @@ export default function MarginWatch({
 
   function onResolved(job: Job) {
     setResolved((s) => new Set(s).add(job.id));
-    setProtectedAmt((p) => p + job.flag!.recoverable);
+    setProtectedAmt((p) => p + job.flag!.marginAtRisk);
     onLearn(buildLearning(job));
 
     const remaining = flagged.filter(
@@ -214,14 +213,14 @@ export default function MarginWatch({
           kind: "agent",
           text:
             remaining.length > 0
-              ? `${usd(job.flag!.recoverable)} of exposure mitigated on Job ${
+              ? `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
                   job.number
                 }, and the ${job.flag!.costCodeName} benchmark just got tighter — that feeds your next bid. ${
                   remaining.length
                 } more need you; Job ${remaining[0].number} is next at ${usdK(
                   remaining[0].flag!.marginAtRisk
                 )} at risk.`
-              : `${usd(job.flag!.recoverable)} of exposure mitigated on Job ${
+              : `${usd(job.flag!.marginAtRisk)} of exposure mitigated on Job ${
                   job.number
                 }. That clears every job that needs you today — and each fix sharpened a benchmark, so your next bid in the Co-pilot starts from the truth.`,
         },
@@ -438,9 +437,7 @@ function OverviewList({
                   done ? "text-emerald-600" : "text-rose-600"
                 )}
               >
-                {done
-                  ? `+${job.flag!.marginRecovered} pts`
-                  : `${usdK(job.flag!.marginAtRisk)}`}
+                {done ? `✓ plan run` : `${usdK(job.flag!.marginAtRisk)}`}
               </span>
               <ArrowRight className="h-4 w-4 text-ink-300" />
             </div>

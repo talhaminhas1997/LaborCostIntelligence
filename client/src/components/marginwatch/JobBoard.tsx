@@ -133,7 +133,7 @@ export function JobBoard({
                     )}
                   >
                     {resolved
-                      ? `+${job.flag!.marginRecovered} pts`
+                      ? `✓ plan run`
                       : `${usdK(job.flag!.marginAtRisk)} at risk`}
                   </span>
                 </div>

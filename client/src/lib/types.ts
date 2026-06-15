@@ -81,12 +81,12 @@ export interface ActionStep {
   id: string;
   label: string;
   detail: string;
-  /** Margin points this step recovers if approved. */
-  pointsRecovered: number;
-  dollarsRecovered: number;
+  /** $ of projected overrun this step targets — set only on the financial action
+   *  (change order / billing). Process steps (reforecast, alert, benchmark) are 0. */
+  targetsDollars: number;
   /** The concrete artifact this step produces (CO number, reforecast, etc). */
   artifact: string;
-  /** Step 4 — writing the lesson back into the estimating benchmark (the loop). */
+  /** Final step — writing the lesson back into the estimating benchmark (the loop). */
   feedsBenchmark?: boolean;
 }
 
@@ -105,14 +105,13 @@ export interface JobFlag extends ScoreParts {
   costCode: string;
   costCodeName: string;
   overPct: number; // projected overrun on the driver code
-  recoverable: number; // $ recoverable across the plan
-  residualAtRisk: number; // $ that stays at risk (already sunk)
+  driverAtRisk: number; // $ projected overrun on the driver cost code (change-order target)
+  recoverability: "high" | "medium" | "low"; // qualitative, by diagnosed cause
   driverLabel: string; // human label for the diagnosed driver
   summary: string;
   why: string;
   marginNow: number; // baseline margin pts (at bid)
   marginAtCompletion: number; // projected pts if unaddressed
-  marginRecovered: number; // pts recovered if full plan approved
   plan: ActionStep[];
 }
 

@@ -58,13 +58,13 @@ export const JOB_SEEDS: JobSeed[] = [
     blendedRate: 82,
     baselineMarginPct: 12.5,
     weeksTotal: 16,
-    driver: { code: "16-100", kind: "added-scope" },
+    driver: { code: "26-100", kind: "added-scope" },
     lines: [
-      cc("16-100", "Rough-in", 3600, 2220, 1560, 0.5),
-      cc("16-250", "Feeder / distribution", 600, 360, 260, 0.45),
-      cc("16-200", "Panel / service", 800, 360, 280, 0.45),
-      cc("16-300", "Finish / devices", 2400, 360, 240, 0.15),
-      cc("16-700", "Fire alarm", 480, 250, 180, 0.5),
+      cc("26-100", "Rough-in", 3600, 2220, 1560, 0.5),
+      cc("26-250", "Feeder / distribution", 600, 360, 260, 0.45),
+      cc("26-200", "Panel / service", 800, 360, 280, 0.45),
+      cc("26-300", "Finish / devices", 2400, 360, 240, 0.15),
+      cc("28-310", "Fire alarm", 480, 250, 180, 0.5),
     ],
   },
 
@@ -83,7 +83,7 @@ export const JOB_SEEDS: JobSeed[] = [
     lines: [
       cc("23-300", "Ductwork fabrication", 1900, 1180, 560, 0.55),
       cc("23-100", "Equipment set", 700, 430, 200, 0.5),
-      cc("23-050", "Demolition", 300, 150, 60, 0.5),
+      cc("02-050", "Demolition", 300, 150, 60, 0.5),
     ],
   },
 
@@ -119,11 +119,11 @@ export const JOB_SEEDS: JobSeed[] = [
     blendedRate: 80,
     baselineMarginPct: 12.2,
     weeksTotal: 12,
-    driver: { code: "16-300", kind: "rework" },
+    driver: { code: "26-300", kind: "rework" },
     lines: [
-      cc("16-300", "Finish / devices", 1400, 1290, 90, 0.85),
-      cc("16-100", "Rough-in", 1800, 1760, 20, 0.99),
-      cc("16-700", "Fire alarm", 300, 270, 10, 0.95),
+      cc("26-300", "Finish / devices", 1400, 1290, 90, 0.85),
+      cc("26-100", "Rough-in", 1800, 1760, 20, 0.99),
+      cc("28-310", "Fire alarm", 300, 270, 10, 0.95),
     ],
   },
 
@@ -148,16 +148,16 @@ export const JOB_SEEDS: JobSeed[] = [
   /* ============================ CALM — the quiet majority ================ */
 
   calm("j51", "051", "Cedar Point Medical TI", "Electrical", "Mountain West", 1840000, 80, 13.1, 10, 1.0, [
-    cc("16-100", "Rough-in", 1100, 1090, 0, 1.0),
-    cc("16-300", "Finish / devices", 820, 815, 0, 1.0),
+    cc("26-100", "Rough-in", 1100, 1090, 0, 1.0),
+    cc("26-300", "Finish / devices", 820, 815, 0, 1.0),
   ]),
   calm("j93", "093", "Riverside Logistics Hub", "Mechanical/HVAC", "Midwest", 3120000, 85, 11.9, 16, 0.62, [
     cc("23-300", "Ductwork fabrication", 2100, 1290, 760, 0.62),
     cc("23-100", "Equipment set", 900, 540, 340, 0.6),
   ]),
   calm("j110", "110", "Foundry Lofts Phase 2", "Electrical", "Mountain West", 2475000, 81, 12.4, 14, 0.48, [
-    cc("16-100", "Rough-in", 1600, 760, 820, 0.48),
-    cc("16-300", "Finish / devices", 1200, 120, 980, 0.1),
+    cc("26-100", "Rough-in", 1600, 760, 820, 0.48),
+    cc("26-300", "Finish / devices", 1200, 120, 980, 0.1),
   ]),
   calm("j145", "145", "Summit Office Park B", "Plumbing", "Mountain West", 980000, 75, 10.2, 11, 0.71, [
     cc("22-100", "Piping", 850, 600, 200, 0.74),
@@ -168,12 +168,12 @@ export const JOB_SEEDS: JobSeed[] = [
     cc("03-300", "Placement", 2400, 760, 1560, 0.32),
   ]),
   calm("j168", "168", "Birchwood Apartments", "Electrical", "Southwest", 1610000, 79, 11.0, 12, 0.8, [
-    cc("16-100", "Rough-in", 1050, 840, 200, 0.8),
-    cc("16-300", "Finish / devices", 760, 600, 150, 0.79),
+    cc("26-100", "Rough-in", 1050, 840, 200, 0.8),
+    cc("26-300", "Finish / devices", 760, 600, 150, 0.79),
   ]),
   calm("j189", "189", "Westview Data Center Fit-out", "Electrical", "Mountain West", 5380000, 88, 14.2, 24, 0.41, [
-    cc("16-250", "Switchgear", 2600, 1060, 1500, 0.41),
-    cc("16-100", "Rough-in", 3000, 1230, 1740, 0.42),
+    cc("26-250", "Switchgear", 2600, 1060, 1500, 0.41),
+    cc("26-100", "Rough-in", 3000, 1230, 1740, 0.42),
   ]),
   calm("j201", "201", "Maplewood Senior Living", "Plumbing", "Midwest", 1320000, 74, 10.7, 13, 0.55, [
     cc("22-100", "Piping", 1100, 600, 480, 0.55),
@@ -188,8 +188,8 @@ export const JOB_SEEDS: JobSeed[] = [
     cc("03-300", "Placement", 3800, 720, 3000, 0.18),
   ]),
   calm("j238", "238", "Elmwood Retail Renovation", "Electrical", "Southwest", 740000, 78, 11.5, 9, 0.88, [
-    cc("16-100", "Rough-in", 520, 460, 50, 0.89),
-    cc("16-300", "Finish / devices", 360, 315, 30, 0.87),
+    cc("26-100", "Rough-in", 520, 460, 50, 0.89),
+    cc("26-300", "Finish / devices", 360, 315, 30, 0.87),
   ]),
 ];
 
@@ -200,11 +200,11 @@ export const SEED_LEARNINGS: Learning[] = [
     jobNumber: "051",
     jobName: "Cedar Point Medical TI",
     trade: "Electrical",
-    costCode: "16-100",
+    costCode: "26-100",
     costCodeName: "Rough-in",
     overranPct: 9,
     kind: "added-scope",
-    text: "Completed Job 051 closed 9% over on rough-in (16-100) — medical TI rough-in benchmark raised for Mountain West.",
+    text: "Completed Job 051 closed 9% over on rough-in (26-100) — medical TI rough-in benchmark raised for Mountain West.",
     source: "seed",
   },
   {
@@ -212,11 +212,11 @@ export const SEED_LEARNINGS: Learning[] = [
     jobNumber: "318",
     jobName: "Aspen Grove Clinic (closed)",
     trade: "Electrical",
-    costCode: "16-700",
+    costCode: "28-310",
     costCodeName: "Fire alarm",
     overranPct: 19,
     kind: "underbid",
-    text: "Closed Job 318 ran 19% over on fire alarm (16-700) tie-ins — low-voltage benchmark tightened.",
+    text: "Closed Job 318 ran 19% over on fire alarm (28-310) tie-ins — low-voltage benchmark tightened.",
     source: "seed",
   },
   {
@@ -224,11 +224,11 @@ export const SEED_LEARNINGS: Learning[] = [
     jobNumber: "264",
     jobName: "Lincoln Yards TI (closed)",
     trade: "Electrical",
-    costCode: "16-300",
+    costCode: "26-300",
     costCodeName: "Finish / devices",
     overranPct: 12,
     kind: "rework",
-    text: "Closed Job 264 absorbed 12% rework on finish/devices (16-300) — punch allowance baked into the benchmark.",
+    text: "Closed Job 264 absorbed 12% rework on finish/devices (26-300) — punch allowance baked into the benchmark.",
     source: "seed",
   },
 ];

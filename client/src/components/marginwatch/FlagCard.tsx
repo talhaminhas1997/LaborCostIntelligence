@@ -6,7 +6,6 @@ import {
   Check,
   Loader2,
   TrendingDown,
-  TrendingUp,
   ShieldCheck,
   RefreshCw,
 } from "lucide-react";
@@ -64,7 +63,7 @@ export function FlagCard({
     }, 720);
   }
 
-  const recoveredMargin = (flag.marginAtCompletion + flag.marginRecovered).toFixed(1);
+  const atStakePts = (flag.marginNow - flag.marginAtCompletion).toFixed(1);
 
   return (
     <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-soft">
@@ -114,14 +113,14 @@ export function FlagCard({
         {/* Metrics */}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label="Over budget" value={`${flag.overPct}%`} tone="danger" />
-          <Metric label="At risk" value={usdK(flag.marginAtRisk)} tone="danger" />
-          <Metric label="Recoverable" value={usdK(flag.recoverable)} tone="brand" />
+          <Metric label="Projected overrun" value={usdK(flag.marginAtRisk)} tone="danger" />
           <Metric
-            label="Confidence"
-            value={flag.confidenceLabel}
-            tone="neutral"
+            label="Recoverability"
+            value={flag.recoverability}
+            tone="brand"
             capitalize
           />
+          <Metric label="Time to act" value={`${flag.weeksLeftToAct} wks`} tone="neutral" />
         </div>
 
         {/* Margin projection */}
@@ -131,23 +130,12 @@ export function FlagCard({
             <span className="text-ink-500">Margin</span>
             <span className="font-semibold text-ink-700">{flag.marginNow}%</span>
             <ArrowRight className="h-3.5 w-3.5 text-ink-400" />
-            <span
-              className={cn(
-                "font-semibold",
-                phase === "done" ? "text-ink-400 line-through" : "text-rose-600"
-              )}
-            >
+            <span className="font-semibold text-rose-600">
               {flag.marginAtCompletion}%
             </span>
-            {phase === "done" && (
-              <>
-                <ArrowRight className="h-3.5 w-3.5 text-ink-400" />
-                <span className="font-semibold text-emerald-600">
-                  {recoveredMargin}%
-                </span>
-              </>
-            )}
-            <span className="text-xs text-ink-400">at completion</span>
+            <span className="text-xs text-ink-400">
+              if unaddressed · {atStakePts} pts at stake
+            </span>
           </div>
         </div>
 
@@ -189,9 +177,9 @@ export function FlagCard({
                       <span className="text-sm font-medium text-ink-800">
                         {step.label}
                       </span>
-                      {step.dollarsRecovered > 0 && (
-                        <span className="tabular shrink-0 text-xs font-semibold text-emerald-600">
-                          +{usdK(step.dollarsRecovered)}
+                      {step.targetsDollars > 0 && (
+                        <span className="tabular shrink-0 text-xs font-medium text-ink-500">
+                          targets {usdK(step.targetsDollars)}
                         </span>
                       )}
                     </div>
@@ -257,14 +245,15 @@ export function FlagCard({
           >
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
-                <TrendingUp className="h-4 w-4" />
+                <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
                 <div className="text-sm font-semibold text-emerald-800">
-                  +{flag.marginRecovered} margin points · {usd(flag.recoverable)} risk mitigated
+                  Risk mitigated on Job {job.number}
                 </div>
                 <div className="text-xs text-emerald-600">
-                  Benchmark updated — feeds your next bid on Job {job.number}&apos;s scope.
+                  {flag.plan[0].label.split(" · ")[0]} for {usd(flag.driverAtRisk)} · margin
+                  reforecast · benchmark updated.
                 </div>
               </div>
             </div>

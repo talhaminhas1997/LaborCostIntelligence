@@ -20,32 +20,40 @@ const clamp = (n: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, n));
 const round = (n: number, step = 1) => Math.round(n / step) * step;
 
-/* How much of the projected overrun is still recoverable, by diagnosed driver. */
+/* Diagnosed driver → recovery playbook. `recoverability` is a qualitative read
+ * of how much of the overrun can realistically be clawed back given the cause
+ * (out-of-scope labor is billable; quality rework is mostly sunk). It is a
+ * judgment label, not a computed percentage. */
 const KIND: Record<
   FlagKind,
-  { label: string; recoverFactor: number; firstStep: string; firstArtifact: (n: string) => string }
+  {
+    label: string;
+    recoverability: "high" | "medium" | "low";
+    firstStep: string;
+    firstArtifact: (n: string) => string;
+  }
 > = {
   "added-scope": {
     label: "Out-of-scope labor",
-    recoverFactor: 0.85,
+    recoverability: "high",
     firstStep: "Draft change order",
-    firstArtifact: (n) => `CO-${n}-04 drafted`,
+    firstArtifact: (n) => `Change order drafted for Job ${n}`,
   },
   "under-recovery": {
     label: "Billable labor not captured",
-    recoverFactor: 0.9,
+    recoverability: "high",
     firstStep: "Draft billing tickets",
-    firstArtifact: (n) => `3 T&M tickets queued for Job ${n}`,
+    firstArtifact: (n) => `T&M tickets queued for Job ${n}`,
   },
   underbid: {
     label: "Estimate ran light",
-    recoverFactor: 0.55,
+    recoverability: "medium",
     firstStep: "Issue T&M / scope letter",
     firstArtifact: (n) => `Scope letter drafted for Job ${n}`,
   },
   rework: {
     label: "Quality rework (mostly sunk)",
-    recoverFactor: 0.3,
+    recoverability: "low",
     firstStep: "Update live budget",
     firstArtifact: (n) => `Job ${n} budget re-baselined`,
   },
@@ -114,17 +122,13 @@ function scoreJob(
 
 function buildPlan(
   kind: FlagKind,
-  job: { number: string; contractValue: number },
-  driver: CostCodeProjection,
-  recoverable: number
+  job: { number: string },
+  driver: CostCodeProjection
 ): ActionStep[] {
   const k = KIND[kind];
-  const ptsOf = (dollars: number) =>
-    Math.round((dollars / job.contractValue) * 1000) / 10;
-
-  // Most recovery lands on the financial action; reforecast captures the tail.
-  const d1 = round(recoverable * 0.78, 100);
-  const d2 = round(recoverable - d1, 100);
+  // The financial action targets the driver cost code's projected overrun — a
+  // real figure (overrun hours × blended rate), not an invented "recovered" cut.
+  const driverDollars = round(Math.max(0, driver.overrunHours) * driver.rate, 100);
 
   return [
     {
@@ -132,38 +136,34 @@ function buildPlan(
       label: `${k.firstStep} · ${driver.code}`,
       detail:
         kind === "added-scope"
-          ? `Capture the ${Math.round(driver.overrunPct * 100)}% out-of-scope labor as billable change`
+          ? `Capture the ${Math.round(driver.overrunPct * 100)}% out-of-scope labor on ${driver.name} as a billable change`
           : kind === "under-recovery"
-          ? `Recover labor billed below the contract rate on ${driver.name}`
+          ? `Bill the unrecovered labor on ${driver.name} at the contract rate`
           : kind === "underbid"
           ? `Convert remaining ${driver.name} to T&M against the bid gap`
           : `Carry an explicit rework allowance on ${driver.name}`,
-      pointsRecovered: ptsOf(d1),
-      dollarsRecovered: d1,
+      targetsDollars: driverDollars,
       artifact: k.firstArtifact(job.number),
     },
     {
       id: "reforecast",
       label: "Reforecast job margin",
-      detail: `Apply corrected production rate on ${driver.code} to cost-to-complete`,
-      pointsRecovered: ptsOf(d2),
-      dollarsRecovered: d2,
+      detail: `Re-baseline ${driver.code} cost-to-complete at the corrected production rate`,
+      targetsDollars: 0,
       artifact: "Margin reforecast updated",
     },
     {
       id: "alert",
       label: "Alert PM",
       detail: "Variance summary + recommended owner conversation",
-      pointsRecovered: 0,
-      dollarsRecovered: 0,
+      targetsDollars: 0,
       artifact: "PM notified",
     },
     {
       id: "learn",
       label: "Write back to benchmark",
       detail: `Feed ${driver.name} actuals into the estimating benchmark`,
-      pointsRecovered: 0,
-      dollarsRecovered: 0,
+      targetsDollars: 0,
       artifact: `${driver.name} benchmark tightened`,
       feedsBenchmark: true,
     },
@@ -234,8 +234,6 @@ function buildJob(seed: JobSeed): { job: Job; learning?: Learning } {
   const kind: FlagKind = seed.driver?.kind ?? "added-scope";
 
   const sp = scoreJob(totalAtRisk, pctComplete, seed.weeksTotal);
-  const recoverable = Math.round(totalAtRisk * KIND[kind].recoverFactor * sp.pctJobRemaining);
-  const residualAtRisk = Math.round(totalAtRisk - recoverable);
 
   // Drifting but not worth surfacing → monitoring (restraint made visible).
   if (sp.score < SURFACE_MIN_SCORE || totalAtRisk < SURFACE_MIN_AT_RISK) {
@@ -250,9 +248,8 @@ function buildJob(seed: JobSeed): { job: Job; learning?: Learning } {
     return { job: { ...base, status: "monitoring" as JobStatus, driftNote } };
   }
 
-  const plan = buildPlan(kind, seed, driver, recoverable);
-  const marginRecovered =
-    Math.round(plan.reduce((s, p) => s + p.pointsRecovered, 0) * 10) / 10;
+  const plan = buildPlan(kind, seed, driver);
+  const driverAtRisk = Math.round(Math.max(0, driver.overrunHours) * driver.rate);
 
   const flag: JobFlag = {
     ...sp,
@@ -261,14 +258,13 @@ function buildJob(seed: JobSeed): { job: Job; learning?: Learning } {
     costCode: driver.code,
     costCodeName: driver.name,
     overPct: Math.round(driver.overrunPct * 100),
-    recoverable,
-    residualAtRisk,
+    driverAtRisk,
+    recoverability: KIND[kind].recoverability,
     driverLabel: KIND[kind].label,
     summary: summaryFor(kind, driver, sp),
-    why: whyFor(kind, seed, driver, sp, recoverable),
+    why: whyFor(kind, seed, driver, sp, driverAtRisk),
     marginNow: seed.baselineMarginPct,
     marginAtCompletion: projectedMarginPct,
-    marginRecovered,
     plan,
   };
 
@@ -312,18 +308,18 @@ function whyFor(
   seed: JobSeed,
   driver: CostCodeProjection,
   sp: ScoreParts,
-  recoverable: number
+  driverAtRisk: number
 ): string {
   const pct = Math.round(driver.overrunPct * 100);
-  const recK = "$" + Math.round(recoverable / 1000) + "k";
-  const lead = `Actual hours booked to ${driver.code} are outpacing the budgeted rate — the crew is logging ~${pct}% more hours per unit than comparable completed ${seed.trade} jobs in ${seed.region}.`;
+  const drvK = "$" + Math.round(driverAtRisk / 1000) + "k";
+  const lead = `Actual hours booked to ${driver.code} are outpacing the budgeted rate — the crew is logging ~${pct}% more hours per unit than comparable completed ${seed.trade} jobs in ${seed.region}. At the current burn rate that's ${drvK} of projected overrun on this cost code.`;
   if (kind === "added-scope")
-    return `${lead} It reads as out-of-scope work, which means ~${recK} is recoverable through a change order if you act while ${sp.weeksLeftToAct} weeks of install remain.`;
+    return `${lead} It reads as out-of-scope work, so most of it should be billable via a change order if you act while ${sp.weeksLeftToAct} weeks of install remain.`;
   if (kind === "under-recovery")
-    return `${lead} The hours are contractually billable but weren't captured on tickets — ~${recK} is recoverable by correcting the billing now.`;
+    return `${lead} The hours are contractually billable but weren't captured on tickets, so most is recoverable by correcting the billing now.`;
   if (kind === "underbid")
-    return `${lead} The original bid was light here; ~${recK} is recoverable by converting remaining work to T&M and fixing the estimating template.`;
-  return `${lead} It's quality rework, so most is already sunk — only ~${recK} is recoverable, but re-baselining stops it compounding through closeout.`;
+    return `${lead} The original bid was light here; part is recoverable by converting remaining work to T&M, and the estimating template should be fixed for next time.`;
+  return `${lead} It's quality rework, so most is already sunk — re-baselining won't claw it back, but it stops the overrun compounding through closeout.`;
 }
 
 /* ============================================================ portfolio */

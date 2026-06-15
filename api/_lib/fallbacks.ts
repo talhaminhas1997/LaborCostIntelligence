@@ -187,19 +187,19 @@ export function computeAnalyze(req: AnalyzeRequest): AnalyzeResult {
  * =======================================================================*/
 
 const SAMPLE_PHASES = [
-  { name: "Rough-in", hours: 1200, costCode: "16-100" },
-  { name: "Panel/Service", hours: 240, costCode: "16-200" },
-  { name: "Finish/Devices", hours: 880, costCode: "16-300" },
-  { name: "Fire Alarm", hours: 160, costCode: "16-700" },
+  { name: "Rough-in", hours: 1200, costCode: "26-100" },
+  { name: "Panel/Service", hours: 240, costCode: "26-200" },
+  { name: "Finish/Devices", hours: 880, costCode: "26-300" },
+  { name: "Fire Alarm", hours: 160, costCode: "28-310" },
 ];
 
 const COST_CODE_HINTS: { match: RegExp; code: string; label: string }[] = [
-  { match: /rough/i, code: "16-100", label: "Rough-in" },
-  { match: /panel|service|gear|feeder/i, code: "16-200", label: "Panel/Service" },
-  { match: /finish|device|trim|fixture|lighting/i, code: "16-300", label: "Finish/Devices" },
-  { match: /fire\s*alarm|low\s*volt|life\s*safety/i, code: "16-700", label: "Fire Alarm" },
-  { match: /gear|switchgear|distribution/i, code: "16-250", label: "Switchgear" },
-  { match: /demo|tear\s*out/i, code: "16-050", label: "Demolition" },
+  { match: /rough/i, code: "26-100", label: "Rough-in" },
+  { match: /panel|service|gear|feeder/i, code: "26-200", label: "Panel/Service" },
+  { match: /finish|device|trim|fixture|lighting/i, code: "26-300", label: "Finish/Devices" },
+  { match: /fire\s*alarm|low\s*volt|life\s*safety/i, code: "28-310", label: "Fire Alarm" },
+  { match: /gear|switchgear|distribution/i, code: "26-250", label: "Switchgear" },
+  { match: /demo|tear\s*out/i, code: "02-050", label: "Demolition" },
   { match: /duct|sheet\s*metal/i, code: "23-300", label: "Ductwork" },
   { match: /pipe|plumb/i, code: "22-100", label: "Piping" },
   { match: /form|formwork/i, code: "03-100", label: "Formwork" },
