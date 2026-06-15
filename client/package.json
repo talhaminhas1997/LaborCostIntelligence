@@ -1,5 +1,5 @@
 {
-  "name": "labor-cost-intelligence-client",
+  "name": "cost-agent-client",
   "version": "1.0.0",
   "private": true,
   "type": "module",

@@ -1,4 +1,4 @@
-# Labor Cost Intelligence — the Cost Risk Agent
+# Cost Agent
 
 **The labor cost intelligence layer for construction.**
 
@@ -9,8 +9,9 @@ left to act), and — on one human approval — takes governed multi-step action
 protect it: draft change order → reforecast margin → alert the PM → write the
 actuals back to the benchmark.
 
-> **MVP scope:** this build is the **Cost Risk Agent** only. A bidding co-pilot
-> and cross-contractor benchmarks are roadmap, not part of this app.
+> **MVP scope:** this build is **Cost Agent** only — the monitoring + action
+> agent. A bidding co-pilot and cross-contractor benchmarks are roadmap, not
+> part of this app.
 
 ## How the numbers are grounded
 
@@ -35,11 +36,11 @@ model is real.
   (`server/`) for `npm run dev`. Shared logic lives in `api/_lib/core.ts`.
 - **Model:** Anthropic SDK — `claude-sonnet-4-6` for the agent's reasoning, with
   a deterministic fallback so the demo always responds.
-- The Cost Risk Agent's portfolio is **seeded and deterministic** — it never
+- Cost Agent's portfolio is **seeded and deterministic** — it never
   hard-depends on a live API.
 
 ```
-client/   React + Vite app (landing + the Cost Risk Agent at /app)
+client/   React + Vite app (landing + Cost Agent at /app)
   src/lib/engine.ts     cost-code projection + scoring + surfacing engine
   src/lib/seed-data.ts  seeded portfolio (raw cost-code actuals)
 api/      Serverless functions: /api/chat, /api/health (share api/_lib/core.ts)

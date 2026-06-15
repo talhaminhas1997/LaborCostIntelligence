@@ -234,7 +234,7 @@ export function FlagCard({
         {phase === "executing" && (
           <div className="mt-4 flex items-center gap-2 text-sm text-brand-600">
             <Loader2 className="h-4 w-4 animate-spin" />
-            The Cost Risk Agent is executing the plan…
+            Cost Agent is executing the plan…
           </div>
         )}
 

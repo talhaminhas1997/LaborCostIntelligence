@@ -11,7 +11,7 @@ export default function AppPage() {
           <Wordmark onClick={() => navigate("/")} />
           <div className="flex items-center gap-2 rounded-lg border border-ink-200 bg-ink-100 px-3.5 py-1.5 text-sm font-medium text-brand-700">
             <ShieldCheck className="h-4 w-4" />
-            Cost Risk Agent
+            Cost Agent
           </div>
           <div className="hidden w-[120px] justify-end text-right text-xs text-ink-400 sm:flex">
             Always-on · live

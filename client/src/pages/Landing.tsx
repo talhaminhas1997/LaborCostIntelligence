@@ -153,12 +153,12 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 2 — The Cost Risk Agent */}
+      {/* 2 — Cost Agent */}
       <section id="agent" className="border-t border-ink-200 bg-ink-50">
         <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <motion.div {...fadeUp} className="text-center">
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
-              The Cost Risk Agent
+              Cost Agent
             </p>
             <h2 className="mx-auto mt-5 max-w-2xl text-3xl font-extrabold leading-[1.02] tracking-[-0.02em] text-maroon sm:text-5xl">
               Always on. <span className="text-brand-600">On top of your stack.</span>
@@ -361,7 +361,7 @@ export default function Landing() {
             <span className="text-brand-600">you&apos;ve won.</span>
           </motion.h2>
           <motion.p {...fadeUp} className="mx-auto mt-5 max-w-xl text-lg text-ink-500">
-            See the Cost Risk Agent work a live portfolio — surface the risks
+            See Cost Agent work a live portfolio — surface the risks
             that matter and take the fix to done, on your approval.
           </motion.p>
           <motion.div {...fadeUp} className="mt-9">
@@ -436,7 +436,7 @@ function AgentDiagram() {
       </div>
       <div className="mt-5 text-center">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-maroon">
-          Cost Risk Agent
+          Cost Agent
         </div>
         <div className="mt-1 font-mono text-[11px] tracking-wide text-ink-400">
           monitor · surface · act

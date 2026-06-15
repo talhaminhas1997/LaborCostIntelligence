@@ -21,10 +21,13 @@ export function Wordmark({
       className={`group inline-flex items-center gap-2.5 ${className}`}
     >
       <Logo className="h-7 w-7" />
-      <span className="hidden text-[13px] font-medium leading-tight tracking-tight text-ink-500 sm:inline">
-        Labor cost intelligence
-        <br />
-        <span className="text-ink-400">for construction</span>
+      <span className="hidden leading-tight sm:inline">
+        <span className="block text-sm font-semibold tracking-tight text-maroon">
+          Cost Agent
+        </span>
+        <span className="block text-[11px] text-ink-400">
+          labor cost intelligence
+        </span>
       </span>
     </button>
   );

@@ -42,7 +42,7 @@ export interface AnalyzeResult {
   source?: "model" | "fallback";
 }
 
-/* ======================================================= Cost Risk Agent
+/* ======================================================= Cost Agent
  * Features 1 & 2 run on a seeded, deterministic portfolio held client-side,
  * so the demo is fully reproducible. The engine (lib/engine.ts) turns raw
  * cost-code actuals into projections, scores them, and decides the few that
