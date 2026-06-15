@@ -71,6 +71,10 @@ export function FlagCard({
   // Refs mirror amounts/skips so the actioned $ can be read synchronously at finish.
   const amountsRef = useRef<Record<number, number>>({});
   const skippedRef = useRef<Set<number>>(new Set());
+  // Steps dropped by a decision branch (e.g. "our productivity" → no change order).
+  // A ref so the recursive runner sees them synchronously; also folded into
+  // skippedRef so the actioned-$ and outcome counts treat them as skipped.
+  const branchSkipRef = useRef<Set<number>>(new Set());
   // Synchronous "no more pausing" flag for the recursive runner.
   const autoRef = useRef(false);
 
@@ -86,11 +90,34 @@ export function FlagCard({
   const setStep = (idx: number, v: StepState) =>
     setSteps((prev) => prev.map((s, i) => (i === idx ? v : s)));
   const advance = (idx: number) => {
-    if (idx + 1 >= flag.plan.length) {
+    // Glide past any steps a branch dropped.
+    let n = idx + 1;
+    while (n < flag.plan.length && branchSkipRef.current.has(n)) {
+      setStep(n, "skipped");
+      n++;
+    }
+    if (n >= flag.plan.length) {
       setPhase("done");
       onResolved(job, actionedDollars());
-    } else setReviewIdx(idx + 1);
+    } else setReviewIdx(n);
   };
+
+  // A decision can reshape the plan: choosing option `oi` drops the step ids in
+  // `decision.skips[oi]`. They render struck-through and never run — this is what
+  // makes the plan specific to the PM's read of the situation.
+  function applySkips(decisionIdx: number, optionIndex: number) {
+    const ids = flag.plan[decisionIdx].decision?.skips?.[optionIndex];
+    if (!ids?.length) return;
+    ids.forEach((sid) => {
+      const j = flag.plan.findIndex((p) => p.id === sid);
+      if (j > decisionIdx) {
+        branchSkipRef.current.add(j);
+        skippedRef.current.add(j);
+        setStep(j, "skipped");
+        setConfirms((c) => ({ ...c, [j]: "Skipped — not taken on your call." }));
+      }
+    });
+  }
 
   // The auto-runner: agent steps execute on their own; at a decision step it
   // PAUSES for the PM's call — unless autonomous mode is on, in which case it
@@ -101,6 +128,12 @@ export function FlagCard({
       onResolved(job, actionedDollars());
       return;
     }
+    // A branch dropped this step — glide past it without running.
+    if (branchSkipRef.current.has(idx)) {
+      setStep(idx, "skipped");
+      window.setTimeout(() => runAuto(idx + 1), 140);
+      return;
+    }
     const step = flag.plan[idx];
     if (step.decision && !autoRef.current) {
       setStep(idx, "awaiting");
@@ -109,11 +142,14 @@ export function FlagCard({
     }
     setStep(idx, "running");
     window.setTimeout(() => {
-      if (step.decision)
+      if (step.decision) {
+        const rec = step.decision.recommended;
         setConfirms((c) => ({
           ...c,
-          [idx]: `→ ${step.decision!.options[step.decision!.recommended]}`,
+          [idx]: `→ ${step.decision!.options[rec]}`,
         }));
+        applySkips(idx, rec); // autonomous mode takes the recommended branch
+      }
       setStep(idx, "done");
       window.setTimeout(() => runAuto(idx + 1), 300);
     }, 780);
@@ -134,10 +170,11 @@ export function FlagCard({
   }
 
   /** A decision is made — from an executing pause, or the step-through path. */
-  function decide(idx: number, optionText: string) {
+  function decide(idx: number, optionText: string, optionIndex: number) {
     if (refining) return;
     setConfirms((c) => ({ ...c, [idx]: `→ ${optionText}` }));
     setStep(idx, "done");
+    applySkips(idx, optionIndex); // reshape the plan to the PM's call
     if (awaiting === idx) {
       setAwaiting(null);
       window.setTimeout(() => runAuto(idx + 1), 300);
@@ -534,7 +571,7 @@ export function FlagCard({
 
                       {/* Hand-off: an artifact the agent can't send. It drafts
                           it and gives the PM the copy-ready text to send. */}
-                      {step.draft && st !== "pending" && (
+                      {step.draft && st !== "pending" && st !== "skipped" && (
                         <div className="mt-2">
                           <button
                             onClick={() =>
@@ -548,7 +585,10 @@ export function FlagCard({
                               <ChevronRight className="h-3 w-3" />
                             )}
                             <Mail className="h-3 w-3" />
-                            View the drafted {step.draft.kind} — yours to send
+                            View the drafted {step.draft.kind} —{" "}
+                            {step.draft.internal
+                              ? "yours to send to your team"
+                              : "yours to send"}
                           </button>
                           {openDrafts[i] && (
                             <div className="mt-1.5 rounded-lg border border-ink-200 bg-white p-3">
@@ -583,8 +623,9 @@ export function FlagCard({
                                   )}
                                 </button>
                                 <span className="text-[10px] text-ink-400">
-                                  Margin Agent can&apos;t send for you — paste into
-                                  Procore or email to submit.
+                                  {step.draft.internal
+                                    ? "Margin Agent can’t send for you — copy it to your PM / field."
+                                    : "Margin Agent can’t send for you — paste into Procore or email to submit."}
                                 </span>
                               </div>
                             </div>
@@ -679,7 +720,7 @@ export function FlagCard({
                         {step.decision!.options.map((opt, oi) => (
                           <button
                             key={opt}
-                            onClick={() => decide(i, opt)}
+                            onClick={() => decide(i, opt, oi)}
                             className={cn(
                               "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
                               oi === step.decision!.recommended
@@ -830,27 +871,35 @@ export function FlagCard({
         {/* Actions / outcome */}
         {phase === "proposed" && (
           <div className="mt-4">
-            <div className="flex items-center gap-2">
-              <Button onClick={approveAndRun} className="flex-1">
-                Approve &amp; run
+            <div className="mb-1.5 flex items-center justify-between px-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-400">
+              <span>Hands-on</span>
+              <span>Autonomy →</span>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="secondary"
+                onClick={() => setPhase("review")}
+                className="flex-1"
+              >
+                Ask me everything
               </Button>
-              <Button variant="secondary" onClick={runAutonomously} className="flex-1">
+              <Button onClick={approveAndRun} className="flex-1">
+                Keep me in the loop
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={runAutonomously}
+                className="flex-1"
+              >
                 Run autonomously
               </Button>
             </div>
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <p className="text-[11px] leading-relaxed text-ink-400">
-                Approve &amp; run executes step by step and stops at the calls
-                marked <span className="font-medium text-brand-600">your call</span>.
-                Run autonomously takes the recommended call on each.
-              </p>
-              <button
-                onClick={() => setPhase("review")}
-                className="shrink-0 text-[11px] font-medium text-brand-600 hover:text-brand-700"
-              >
-                Step through →
-              </button>
-            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
+              <span className="font-medium text-ink-600">Keep me in the loop</span>{" "}
+              runs the plan and pauses only on the calls marked{" "}
+              <span className="font-medium text-brand-600">your call</span> — the
+              balance between approving every step and letting it run on its own.
+            </p>
           </div>
         )}
 

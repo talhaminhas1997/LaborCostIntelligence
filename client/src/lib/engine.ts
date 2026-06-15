@@ -139,29 +139,31 @@ function buildPlan(
   if (kind === "added-scope") {
     return [
       {
-        id: "trace",
-        label: "Trace the overage",
-        detail: `Plotted ${code} ${name} labor by day — production broke from the as-bid rate ~Wk 6. Pulled the Procore change events over that window.`,
+        id: "verify",
+        label: "Verify the signal",
+        detail: `Confirmed the ${code} overage is real before acting: no labor mis-coded in from finish/devices, and field %-complete on ${name} matches the pay app. The drift is genuine, not a coding artifact.`,
         targetsDollars: 0,
-        artifact: "ASI-014 + RFI-022 matched to the window",
+        artifact: "Signal verified — clean labor coding",
         systems: [
-          { name: "Miter Payroll", mode: "read", note: "hours by day" },
+          { name: "Miter Payroll", mode: "read", note: "labor by cost code" },
           { name: "Miter Field Ops", mode: "read", note: "units installed" },
-          { name: "Procore", mode: "read", note: "change events" },
         ],
       },
       {
         id: "d-basis",
-        label: "Confirm the basis",
-        detail: "The overage lines up with ASI-014 (added receptacles, L3) and RFI-022.",
+        label: "Confirm basis & entitlement",
+        detail: `Plotted ${code} labor by day — production broke from the as-bid rate ~Wk 6, lining up with ASI-014 (added receptacles, L3) and RFI-022. We're inside the contract's change-notice window, so entitlement still holds if you act now.`,
         targetsDollars: 0,
         artifact: "",
         decision: {
           question: "Owner-directed added scope — billable?",
           options: ["Yes — billable", "Partly", "No — our productivity"],
           recommended: 0,
+          // "No — our productivity" → not billable: drop the change order and the
+          // GC hand-off; the plan collapses to brief + reforecast + fix-the-estimate.
+          skips: { 2: ["action", "d-submit"] },
         },
-        systems: [{ name: "Procore", mode: "read", note: "ASI-014 / RFI-022" }],
+        systems: [{ name: "Procore", mode: "read", note: "ASI-014 / RFI-022 · notice window" }],
       },
       {
         id: "action",
@@ -200,6 +202,32 @@ Thanks,
         },
       },
       {
+        id: "brief",
+        label: "Brief the PM + field",
+        detail: "Drafted the internal variance brief: where the margin stands, and a go-forward instruction so the field stops absorbing directed changes. I can't send it for you — it's ready to share.",
+        targetsDollars: 0,
+        artifact: "Variance brief ready for your PM / field",
+        systems: [{ name: "Email", mode: "write", note: "internal — you send" }],
+        draft: {
+          kind: "email",
+          internal: true,
+          to: "Project manager · Field superintendent",
+          subject: `Job ${job.number} — ${name} (${code}) variance + go-forward`,
+          body: `Team,
+
+Quick heads-up on Job ${job.number}. ${name} (${code}) is tracking ~${overPct}% over the as-bid rate — the overage traces to ASI-014 / RFI-022, so it's added scope we're pursuing on a COR (~$${driverDollars.toLocaleString()}).
+
+Two asks going forward:
+1. Any further ASI-directed work on ${code} goes on a T&M ticket the same day — we don't absorb directed changes.
+2. Confirm the crew on the remaining rough-in is sized to the now-larger scope so we hold the as-bid production rate from here.
+
+I'll keep the EAC updated as the COR moves.
+
+Thanks,
+[Your name]`,
+        },
+      },
+      {
         id: "reforecast",
         label: "Reforecast + update budget",
         detail: "Rebaselined the EAC with the COR pending (approval-risk haircut), flagged the cash-flow lag, and updated the live budget.",
@@ -226,7 +254,7 @@ Thanks,
       {
         id: "reconcile",
         label: "Reconcile billed vs logged",
-        detail: `Matched logged ${name} hours (Miter) against T&M tickets (Procore). Found ${kfmt(driverDollars)} of billable labor not yet ticketed; pulled the daily logs as backup.`,
+        detail: `First confirmed the ${code} hours are coded right (not picking up another scope), then matched logged ${name} hours (Miter) against T&M tickets (Procore). Found ${kfmt(driverDollars)} of billable labor not yet ticketed; pulled the daily logs as backup.`,
         targetsDollars: 0,
         artifact: `${kfmt(driverDollars)} unbilled labor isolated`,
         systems: [
@@ -286,12 +314,30 @@ Thanks,
       },
       {
         id: "budget",
-        label: "Update budget + close the gap",
-        detail: "Updated the live budget and flagged the ticketing-process gap so it stops recurring.",
+        label: "Update budget + direct the field",
+        detail: "Updated the live budget, then drafted a short directive so daily T&M capture sticks and this stops recurring. I can't send it for you — it's ready to share with the field.",
         targetsDollars: 0,
-        artifact: "Budget updated · process flag raised",
+        artifact: "Budget updated · field directive ready",
         feedsBenchmark: true,
-        systems: [{ name: "ERP budget", mode: "write", note: "live budget" }],
+        systems: [
+          { name: "ERP budget", mode: "write", note: "live budget" },
+          { name: "Email", mode: "write", note: "internal — you send" },
+        ],
+        draft: {
+          kind: "email",
+          internal: true,
+          to: "Field superintendent · Foreman",
+          subject: `Job ${job.number} — daily T&M capture on ${code} ${name}`,
+          body: `Team,
+
+We just recovered ${kfmt(driverDollars)} of billable ${name.toLowerCase()} labor on Job ${job.number} that hadn't made it onto T&M tickets — work we'd already paid for and could easily have eaten.
+
+Going forward on any T&M-eligible scope: log the ticket the same day the hours are worked, with the daily-log backup attached. Don't let them age — the contract requires sign-off inside 30 days or we lose the right to bill them.
+
+Appreciate it — this is straight margin.
+
+[Your name]`,
+        },
       },
     ];
   }
@@ -299,58 +345,103 @@ Thanks,
   if (kind === "underbid") {
     return [
       {
-        id: "check",
-        label: "Check the basis",
-        detail: `No change events on ${code} ${name} in Procore — reads as a bid gap, not added scope. Quantified as-bid vs actual fab rate → EAC.`,
+        id: "verify",
+        label: "Verify the signal",
+        detail: `Confirmed the ${code} overage is real: hours are coded to ${name}, not bleeding in from an adjacent code, and the field %-complete matches. The fab rate is genuinely running over the bid.`,
         targetsDollars: 0,
-        artifact: "Bid gap isolated",
+        artifact: "Signal verified — clean coding",
         systems: [
-          { name: "Procore", mode: "read", note: "change events" },
+          { name: "Miter Payroll", mode: "read", note: "actual fab rate" },
+          { name: "Miter Field Ops", mode: "read", note: "units installed" },
+        ],
+      },
+      {
+        id: "check",
+        label: "Isolate the basis",
+        detail: `Checked Procore for change events on ${code} ${name} — none. Also looked for GC-caused inefficiency (out-of-sequence, trade stacking, directed OT). On the data it reads as a bid gap, not added scope — but that's a judgment call.`,
+        targetsDollars: 0,
+        artifact: "As-bid vs actual fab rate quantified → EAC",
+        systems: [
+          { name: "Procore", mode: "read", note: "change events · schedule" },
           { name: "Miter Payroll", mode: "read", note: "actual fab rate" },
         ],
       },
       {
         id: "d-diag",
         label: "Confirm the diagnosis",
-        detail: `No change events on the ${name}.`,
+        detail: `My read: bid gap, no entitlement. But if you've seen GC-driven inefficiency or differing conditions in the field, there may be a claim here — that changes the play.`,
         targetsDollars: 0,
         artifact: "",
         decision: {
           question: "How do you read it?",
-          options: ["Underbid — we eat it", "Actually added scope", "Field / rework issue"],
+          options: ["Underbid — we eat it", "Actually added scope / GC inefficiency", "Field / rework issue"],
           recommended: 0,
+          // Only the middle read carries entitlement → keep the GC letter. The
+          // other two skip it (we eat it / handle as a field problem).
+          skips: { 0: ["pursue"], 2: ["pursue"] },
         },
         systems: [{ name: "Procore", mode: "read" }],
       },
       {
-        id: "protect",
-        label: "Reforecast + protect the rest",
-        detail: "Reforecast at the true fab rate and updated the budget so the remaining cost codes hold. Little to recover on this job — the win is on the next one.",
+        id: "pursue",
+        label: "Pursue recovery · scope/inefficiency letter",
+        detail: "Drafted a scope-clarification / inefficiency letter to the GC to establish entitlement before we eat it. I can't send it from the platform — it's yours to submit.",
         targetsDollars: 0,
-        artifact: "Job EAC + budget updated",
-        systems: [{ name: "ERP budget", mode: "write", note: "EAC + live budget" }],
+        artifact: "Entitlement letter drafted for the GC",
+        systems: [{ name: "Email", mode: "write", note: "draft to the GC — you send" }],
+        draft: {
+          kind: "email",
+          to: "GC project manager",
+          subject: `Job ${job.number} — ${name} (${code}) production impact / request for direction`,
+          body: `Hi [GC PM],
+
+Our labor on ${name.toLowerCase()} (${code}) is running materially over our planned production rate. Before we absorb it, we want to flag conditions on site that have affected productivity — sequencing of preceding trades and access to the work areas — and confirm our understanding of the intended scope.
+
+We're documenting the impacted hours (~$${driverDollars.toLocaleString()} to date) with daily-log backup. Please advise on direction so we can resolve this collaboratively; we'd like to discuss whether a portion is recoverable under the contract's changes/impact provisions.
+
+Happy to walk the area together this week.
+
+Thanks,
+[Your name] · Job ${job.number}`,
+        },
+      },
+      {
+        id: "protect",
+        label: "Reforecast + bend the curve",
+        detail: `Reforecast at the true fab rate, then drafted a field directive to claw back what we can on the remaining ${name.toLowerCase()}: prefab/spool more offsite and re-sequence so the back half produces better than the front. I can't send it — it's ready for the field.`,
+        targetsDollars: 0,
+        artifact: "EAC updated · re-sequence directive ready",
+        systems: [
+          { name: "ERP budget", mode: "write", note: "EAC + live budget" },
+          { name: "Email", mode: "write", note: "internal — you send" },
+        ],
+        draft: {
+          kind: "email",
+          internal: true,
+          to: "Field superintendent · Foreman",
+          subject: `Job ${job.number} — ${name} (${code}) production plan, remaining work`,
+          body: `Team,
+
+${name} (${code}) is running over the bid fab rate and we're past halfway, so the remaining work is where we make it back.
+
+Two changes for the back half:
+1. Move as much fab offsite as we can — spool/prefab the runs we'd otherwise build in place.
+2. Re-sequence so we're not chasing access; group the runs to cut setup/teardown.
+
+Goal is to get the remaining hours-per-unit back toward the bid. Let's review the look-ahead together Friday.
+
+Thanks,
+[Your name]`,
+        },
       },
       {
         id: "learn",
         label: "Fix the next bid",
-        detail: `Wrote the actual ${name} rate back to the estimate (${job.trade} · ${job.region}) so the next bid isn't light.`,
+        detail: `Wrote the actual ${name} rate back to the estimate (${job.trade} · ${job.region}) so the next bid isn't light. This job's win is mostly the next estimate.`,
         targetsDollars: 0,
         artifact: "Estimating template corrected",
         feedsBenchmark: true,
         systems: [{ name: "Estimating benchmark", mode: "write" }],
-      },
-      {
-        id: "d-claw",
-        label: "Optional — claw back part of it",
-        detail: `The remaining ${name} could be prefabbed or re-sequenced.`,
-        targetsDollars: 0,
-        artifact: "",
-        decision: {
-          question: "Model a prefab / re-sequence scenario?",
-          options: ["Yes, model it", "No"],
-          recommended: 0,
-        },
-        systems: [{ name: "Margin Agent", mode: "read", note: "scenario model" }],
       },
     ];
   }

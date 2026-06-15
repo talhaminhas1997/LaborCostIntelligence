@@ -96,6 +96,10 @@ export interface ActionStep {
     to: string;
     subject: string;
     body: string;
+    /** Internal hand-off (PM / field) rather than to a third party. Margin Agent
+     *  still can't send it, so the copy hint changes from "submit" to "send to
+     *  your team" but the copy affordance is identical. */
+    internal?: boolean;
   };
   /** External systems this step touches — shown on the step so the ops manager
    *  sees exactly what's read and what's written before approving. */
@@ -103,7 +107,17 @@ export interface ActionStep {
   /** Present → this step is a PM decision point (a judgment only the human can
    *  make), not an autonomous agent action. The agent has already done the work
    *  to surface it; the PM just picks. `recommended` is the agent's default. */
-  decision?: { question: string; options: string[]; recommended: number };
+  decision?: {
+    question: string;
+    options: string[];
+    recommended: number;
+    /** Branching: choosing option index `i` drops these downstream step ids from
+     *  the run (they render struck-through, skipped). This is what makes the plan
+     *  reshape to the PM's call — e.g. "No, it's our productivity" drops the
+     *  change-order + GC hand-off; "Actually added scope" keeps a recovery letter
+     *  that's otherwise skipped. Keyed by option index. */
+    skips?: Record<number, string[]>;
+  };
 }
 
 export interface ScoreParts {
