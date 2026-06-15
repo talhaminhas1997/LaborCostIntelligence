@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, LayoutGrid, BarChart3, ChevronLeft } from "lucide-react";
+import { Send, LayoutGrid, BarChart3, ChevronLeft, ChevronDown } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -48,6 +48,10 @@ export default function MarginWatch() {
   const [activeId, setActiveId] = useState<string>(OVERVIEW);
   // Mobile master-detail: show the board, or the open thread (not both).
   const [mobilePane, setMobilePane] = useState<"board" | "thread">("board");
+  // Threads the user has opened, most-recent first — their chat history.
+  const [history, setHistory] = useState<string[]>([]);
+  // Let the user collapse the portfolio panel for a bigger conversation.
+  const [rollupCollapsed, setRollupCollapsed] = useState(false);
 
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   // Starts at $0 and grows only as you act — no invented baseline.
@@ -106,6 +110,7 @@ export default function MarginWatch() {
     setThreads((prev) =>
       prev[job.id] ? prev : { ...prev, [job.id]: seedThread(job) }
     );
+    setHistory((h) => [job.id, ...h.filter((id) => id !== job.id)]);
     setActiveId(job.id);
     setMobilePane("thread");
   }
@@ -232,7 +237,7 @@ export default function MarginWatch() {
         <JobBoard
           flagged={flagged}
           monitoring={monitoring}
-          calm={calm}
+          recent={history.map((id) => jobById(id)).filter(Boolean) as Job[]}
           activeThreadId={activeId}
           resolvedJobs={resolved}
           protectedAmt={protectedAmt}
@@ -255,7 +260,7 @@ export default function MarginWatch() {
           onBack={() => setMobilePane("board")}
         />
 
-        {/* Portfolio roll-up — pinned under the Overview header, not in the chat */}
+        {/* Portfolio roll-up — pinned under the Overview header; collapsible */}
         {activeId === OVERVIEW && (
           <div className="border-b border-ink-200 bg-white px-4 pt-4 sm:px-6">
             <div className="mx-auto max-w-2xl pb-4">
@@ -264,6 +269,8 @@ export default function MarginWatch() {
                 monitoring={monitoring}
                 calm={calm}
                 mitigated={protectedAmt}
+                collapsed={rollupCollapsed}
+                onToggle={() => setRollupCollapsed((c) => !c)}
               />
             </div>
           </div>
@@ -439,11 +446,15 @@ function PortfolioRollup({
   monitoring,
   calm,
   mitigated,
+  collapsed,
+  onToggle,
 }: {
   flagged: Job[];
   monitoring: Job[];
   calm: Job[];
   mitigated: number;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   const all = [...flagged, ...monitoring, ...calm];
   const total = all.length || 1;
@@ -452,14 +463,31 @@ function PortfolioRollup({
   const seg = (n: number) => (n / total) * 100;
   return (
     <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-soft">
-      <div className="mb-3 flex items-center gap-2">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 text-left"
+      >
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
           <BarChart3 className="h-4 w-4" />
         </div>
         <h3 className="text-sm font-semibold text-ink-900">Portfolio roll-up</h3>
-        <span className="text-[11px] text-ink-400">· {all.length} active jobs</span>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
+        {collapsed ? (
+          <span className="tabular text-[11px] text-ink-400">
+            · <span className="font-medium text-rose-600">{usdK(surfacedAtRisk)}</span> at risk · {flagged.length} need you
+          </span>
+        ) : (
+          <span className="text-[11px] text-ink-400">· {all.length} active jobs</span>
+        )}
+        <ChevronDown
+          className={cn(
+            "ml-auto h-4 w-4 text-ink-400 transition-transform",
+            collapsed && "-rotate-90"
+          )}
+        />
+      </button>
+      {!collapsed && (
+        <>
+      <div className="mt-3 grid grid-cols-3 gap-3">
         <RollStat label="Contract value" value={`$${(totalContract / 1e6).toFixed(1)}M`} />
         <RollStat label="Surfaced at risk" value={usdK(surfacedAtRisk)} tone="danger" />
         <RollStat label="Risk actioned" value={usd(mitigated)} tone="brand" />
@@ -476,6 +504,8 @@ function PortfolioRollup({
           <span className="text-emerald-600">● {calm.length} on budget</span>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

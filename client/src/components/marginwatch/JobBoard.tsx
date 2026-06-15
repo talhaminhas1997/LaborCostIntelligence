@@ -1,5 +1,6 @@
+import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck, LayoutGrid, Check } from "lucide-react";
+import { ShieldCheck, LayoutGrid, ChevronDown, MessageSquare } from "lucide-react";
 import { cn, usd, usdK } from "@/lib/utils";
 import type { FlagKind, Job } from "@/lib/types";
 
@@ -11,13 +12,14 @@ const KIND_LABEL: Record<FlagKind, string> = {
 };
 
 /**
- * Left-hand "Job board" — each row opens that job's own chat thread.
- * Mirrors a messaging app: jobs on the left, an independent conversation each.
+ * Left-hand sidebar for the Margin Agent. The agent proactively surfaces the
+ * few jobs that need attention (Needs you / Watching, collapsible); below that
+ * is the user's history of conversations with the agent.
  */
 export function JobBoard({
   flagged,
   monitoring,
-  calm,
+  recent,
   activeThreadId,
   resolvedJobs,
   protectedAmt,
@@ -27,7 +29,7 @@ export function JobBoard({
 }: {
   flagged: Job[];
   monitoring: Job[];
-  calm: Job[];
+  recent: Job[];
   activeThreadId: string;
   resolvedJobs: Set<string>;
   protectedAmt: number;
@@ -35,6 +37,18 @@ export function JobBoard({
   onSelectJob: (job: Job) => void;
   onSelectOverview: () => void;
 }) {
+  const [open, setOpen] = useState({ needs: true, watch: true, recent: true });
+  const toggle = (k: keyof typeof open) =>
+    setOpen((o) => ({ ...o, [k]: !o[k] }));
+
+  const needsYou = flagged.filter((j) => !resolvedJobs.has(j.id));
+  // History: opened conversations that aren't currently in the proactive lists.
+  const recentChats = recent.filter(
+    (j) =>
+      !monitoring.some((m) => m.id === j.id) &&
+      !(flagged.some((f) => f.id === j.id) && !resolvedJobs.has(j.id))
+  );
+
   return (
     <div className="flex h-full flex-col bg-white">
       {/* Header + tally */}
@@ -57,9 +71,7 @@ export function JobBoard({
           </div>
           <span className="h-3 w-px bg-ink-200" />
           <div>
-            <span className="tabular font-semibold text-ink-700">
-              {jobsMonitored}
-            </span>
+            <span className="tabular font-semibold text-ink-700">{jobsMonitored}</span>
             <span className="text-ink-400"> monitored</span>
           </div>
         </div>
@@ -79,60 +91,46 @@ export function JobBoard({
           <LayoutGrid className="h-4 w-4 shrink-0" />
           <span className="text-sm font-medium">Overview</span>
           <span className="ml-auto rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
-            {flagged.filter((j) => !resolvedJobs.has(j.id)).length} need you
+            {needsYou.length} need you
           </span>
         </button>
 
-        {/* Needs you — only unresolved flags; resolved ones move to Mitigated */}
-        {(() => {
-          const needsYou = flagged.filter((j) => !resolvedJobs.has(j.id));
-          const done = flagged.filter((j) => resolvedJobs.has(j.id));
-          return (
-            <>
-              <SectionLabel tone="danger" title="Needs you" sub="ranked" />
-              {needsYou.length > 0 ? (
-                <div className="space-y-1.5">
-                  {needsYou.map((job, i) => (
-                    <FlaggedRow
-                      key={job.id}
-                      job={job}
-                      i={i}
-                      active={activeThreadId === job.id}
-                      resolved={false}
-                      onClick={() => onSelectJob(job)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="px-2 text-xs font-medium text-emerald-600">
-                  ✓ All clear — every flagged job mitigated.
-                </p>
-              )}
-              {done.length > 0 && (
-                <>
-                  <SectionLabel tone="success" title="Mitigated" sub="acted today" />
-                  <div className="space-y-1.5">
-                    {done.map((job, i) => (
-                      <FlaggedRow
-                        key={job.id}
-                        job={job}
-                        i={i}
-                        active={activeThreadId === job.id}
-                        resolved
-                        onClick={() => onSelectJob(job)}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          );
-        })()}
+        {/* Needs you */}
+        <Section
+          tone="danger"
+          title="Needs you"
+          sub="ranked"
+          collapsed={!open.needs}
+          onToggle={() => toggle("needs")}
+        >
+          {needsYou.length > 0 ? (
+            <div className="space-y-1.5">
+              {needsYou.map((job, i) => (
+                <FlaggedRow
+                  key={job.id}
+                  job={job}
+                  i={i}
+                  active={activeThreadId === job.id}
+                  onClick={() => onSelectJob(job)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="px-2 text-xs font-medium text-emerald-600">
+              ✓ All clear — every flagged job mitigated.
+            </p>
+          )}
+        </Section>
 
         {/* Watching */}
         {monitoring.length > 0 && (
-          <>
-            <SectionLabel tone="warn" title="Watching" sub="below threshold" />
+          <Section
+            tone="warn"
+            title="Watching"
+            sub="below threshold"
+            collapsed={!open.watch}
+            onToggle={() => toggle("watch")}
+          >
             <div className="space-y-0.5">
               {monitoring.map((job) => (
                 <JobRow
@@ -144,23 +142,79 @@ export function JobBoard({
                 />
               ))}
             </div>
-          </>
+          </Section>
         )}
 
-        {/* On budget — collapsed to a count. This is an attention feed: it only
-            lists jobs that need the ops team. Healthy jobs stay out of the way. */}
-        <div className="mt-4 flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50/40 px-3 py-2.5">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-            <Check className="h-3 w-3" />
-          </span>
-          <span className="text-xs text-ink-500">
-            <span className="font-semibold text-emerald-700">
-              {calm.length} jobs on budget
-            </span>{" "}
-            · tracking inside labor budget, nothing to action
-          </span>
-        </div>
+        {/* Recent — the user's conversation history with the agent */}
+        <Section
+          tone="neutral"
+          title="Recent"
+          sub="your conversations"
+          collapsed={!open.recent}
+          onToggle={() => toggle("recent")}
+        >
+          {recentChats.length > 0 ? (
+            <div className="space-y-0.5">
+              {recentChats.map((job) => (
+                <ChatRow
+                  key={job.id}
+                  job={job}
+                  active={activeThreadId === job.id}
+                  resolved={resolvedJobs.has(job.id)}
+                  onClick={() => onSelectJob(job)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="px-2 text-xs text-ink-400">
+              Your conversations with the agent show up here.
+            </p>
+          )}
+        </Section>
       </div>
+    </div>
+  );
+}
+
+function Section({
+  tone,
+  title,
+  sub,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  tone: "danger" | "warn" | "neutral";
+  title: string;
+  sub: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const color =
+    tone === "danger"
+      ? "text-rose-600"
+      : tone === "warn"
+      ? "text-amber-600"
+      : "text-ink-500";
+  return (
+    <div className="mt-3">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 hover:bg-ink-50"
+      >
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 text-ink-400 transition-transform",
+            collapsed && "-rotate-90"
+          )}
+        />
+        <span className={cn("text-[11px] font-semibold uppercase tracking-wide", color)}>
+          {title}
+        </span>
+        <span className="text-[11px] text-ink-400">· {sub}</span>
+      </button>
+      {!collapsed && <div className="mt-1">{children}</div>}
     </div>
   );
 }
@@ -169,13 +223,11 @@ function FlaggedRow({
   job,
   i,
   active,
-  resolved,
   onClick,
 }: {
   job: Job;
   i: number;
   active: boolean;
-  resolved: boolean;
   onClick: () => void;
 }) {
   return (
@@ -188,8 +240,6 @@ function FlaggedRow({
         "w-full rounded-lg border p-2.5 text-left transition-all",
         active
           ? "border-brand-400 bg-brand-50 shadow-sm"
-          : resolved
-          ? "border-emerald-200 bg-emerald-50/60 hover:border-emerald-300"
           : "border-ink-200 bg-white hover:border-brand-300"
       )}
     >
@@ -200,25 +250,15 @@ function FlaggedRow({
           </span>
           <span className="text-xs font-semibold text-ink-800">Job {job.number}</span>
         </div>
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-[10px] font-medium",
-            resolved ? "bg-emerald-100 text-emerald-700" : "bg-ink-100 text-ink-500"
-          )}
-        >
-          {resolved ? "Risk mitigated" : KIND_LABEL[job.flag!.kind]}
+        <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-medium text-ink-500">
+          {KIND_LABEL[job.flag!.kind]}
         </span>
       </div>
       <p className="mt-1 truncate text-xs text-ink-500">{job.name}</p>
       <div className="mt-1.5 flex items-center justify-between">
         <span className="font-mono text-[10px] text-ink-400">{job.flag!.costCode}</span>
-        <span
-          className={cn(
-            "tabular text-xs font-semibold",
-            resolved ? "text-emerald-600" : "text-rose-600"
-          )}
-        >
-          {resolved ? `✓ plan run` : `${usdK(job.flag!.marginAtRisk)} at risk`}
+        <span className="tabular text-xs font-semibold text-rose-600">
+          {usdK(job.flag!.marginAtRisk)} at risk
         </span>
       </div>
     </motion.button>
@@ -247,8 +287,7 @@ function JobRow({
       <div className="flex min-w-0 items-center gap-2">
         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dot)} />
         <span className="truncate text-xs text-ink-600">
-          <span className="font-medium text-ink-700">Job {job.number}</span> ·{" "}
-          {job.name}
+          <span className="font-medium text-ink-700">Job {job.number}</span> · {job.name}
         </span>
       </div>
       <span className="tabular shrink-0 text-[11px] text-ink-400">
@@ -258,29 +297,34 @@ function JobRow({
   );
 }
 
-function SectionLabel({
-  tone,
-  title,
-  sub,
+function ChatRow({
+  job,
+  active,
+  resolved,
+  onClick,
 }: {
-  tone: "danger" | "warn" | "success";
-  title: string;
-  sub: string;
+  job: Job;
+  active: boolean;
+  resolved: boolean;
+  onClick: () => void;
 }) {
-  const color =
-    tone === "danger"
-      ? "text-rose-600"
-      : tone === "warn"
-      ? "text-amber-600"
-      : "text-emerald-600";
   return (
-    <div className="mb-1.5 mt-4 flex items-center gap-2 px-2">
-      <span
-        className={cn("text-[11px] font-semibold uppercase tracking-wide", color)}
-      >
-        {title}
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors",
+        active ? "bg-ink-100" : "hover:bg-ink-100/70"
+      )}
+    >
+      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+      <span className="truncate text-xs text-ink-600">
+        <span className="font-medium text-ink-700">Job {job.number}</span> · {job.name}
       </span>
-      <span className="text-[11px] text-ink-400">· {sub}</span>
-    </div>
+      {resolved && (
+        <span className="ml-auto shrink-0 text-[10px] font-medium text-emerald-600">
+          ✓ mitigated
+        </span>
+      )}
+    </button>
   );
 }
