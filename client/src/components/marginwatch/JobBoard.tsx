@@ -50,7 +50,7 @@ export function JobBoard({
             <span className="tabular font-semibold text-brand-600">
               {usd(protectedAmt)}
             </span>
-            <span className="text-ink-400"> protected</span>
+            <span className="text-ink-400"> risk mitigated</span>
           </div>
           <span className="h-3 w-px bg-ink-200" />
           <div>
@@ -118,7 +118,7 @@ export function JobBoard({
                         : "bg-rose-100 text-rose-700"
                     )}
                   >
-                    {resolved ? "Protected" : KIND_LABEL[job.flag!.kind]}
+                    {resolved ? "Risk mitigated" : KIND_LABEL[job.flag!.kind]}
                   </span>
                 </div>
                 <p className="mt-1 truncate text-xs text-ink-500">{job.name}</p>

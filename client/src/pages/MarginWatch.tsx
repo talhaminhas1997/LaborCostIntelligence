@@ -214,14 +214,14 @@ export default function MarginWatch({
           kind: "agent",
           text:
             remaining.length > 0
-              ? `${usd(job.flag!.recoverable)} protected on Job ${
+              ? `${usd(job.flag!.recoverable)} of exposure mitigated on Job ${
                   job.number
                 }, and the ${job.flag!.costCodeName} benchmark just got tighter — that feeds your next bid. ${
                   remaining.length
                 } more need you; Job ${remaining[0].number} is next at ${usdK(
                   remaining[0].flag!.marginAtRisk
                 )} at risk.`
-              : `${usd(job.flag!.recoverable)} protected on Job ${
+              : `${usd(job.flag!.recoverable)} of exposure mitigated on Job ${
                   job.number
                 }. That clears every job that needs you today — and each fix sharpened a benchmark, so your next bid in the Co-pilot starts from the truth.`,
         },
@@ -360,7 +360,7 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
   const tone =
     job.status === "flagged"
       ? resolved
-        ? { chip: "bg-emerald-100 text-emerald-700", label: "Protected" }
+        ? { chip: "bg-emerald-100 text-emerald-700", label: "Risk mitigated" }
         : { chip: "bg-rose-100 text-rose-700", label: "Needs you" }
       : job.status === "monitoring"
       ? { chip: "bg-amber-100 text-amber-700", label: "Watching" }

@@ -261,7 +261,7 @@ export function FlagCard({
               </div>
               <div>
                 <div className="text-sm font-semibold text-emerald-800">
-                  +{flag.marginRecovered} margin points · {usd(flag.recoverable)} protected
+                  +{flag.marginRecovered} margin points · {usd(flag.recoverable)} risk mitigated
                 </div>
                 <div className="text-xs text-emerald-600">
                   Benchmark updated — feeds your next bid on Job {job.number}&apos;s scope.
