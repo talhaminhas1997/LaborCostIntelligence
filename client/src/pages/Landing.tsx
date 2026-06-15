@@ -352,9 +352,16 @@ export default function Landing() {
                 transition={{ duration: 0.45, delay: i * 0.06 }}
                 className="flex flex-col rounded-2xl border border-ink-200 bg-white p-6 sm:p-8"
               >
-                {/* numbered label */}
-                <div className="font-mono text-xs uppercase tracking-[0.18em] text-ink-400">
-                  {o.n} · {o.kicker}
+                {/* numbered label + optional "on Miter's data" badge */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-mono text-xs uppercase tracking-[0.18em] text-ink-400">
+                    {o.n} · {o.kicker}
+                  </div>
+                  {o.badge && (
+                    <span className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-brand-700">
+                      {o.badge}
+                    </span>
+                  )}
                 </div>
 
                 {/* minimal node diagram */}
@@ -366,8 +373,13 @@ export default function Landing() {
                 <p className="mt-2 text-sm leading-relaxed text-ink-500">
                   {o.objective}
                 </p>
+                {o.body && (
+                  <p className="mt-3 text-[13px] leading-relaxed text-ink-500">
+                    {o.body}
+                  </p>
+                )}
 
-                <ul className="mt-6 space-y-1.5 border-t border-ink-200 pt-5">
+                <ul className="mt-auto space-y-1.5 border-t border-ink-200 pt-5">
                   {o.footer.map((f) => (
                     <li
                       key={f}
@@ -382,7 +394,42 @@ export default function Landing() {
             ))}
           </div>
 
-          <motion.p {...fadeUp} className="mt-10 text-sm text-ink-500">
+          {/* Built on Miter — the credibility strip */}
+          <motion.div {...fadeUp} className="mt-16">
+            <p className="text-center text-xs font-medium uppercase tracking-[0.25em] text-ink-400">
+              Built on Miter — not over it
+            </p>
+            <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2">
+              <div className="bg-ink-50 p-7">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-ink-400">
+                  Miter gives you
+                </div>
+                <ul className="mt-4 space-y-2.5">
+                  {MITER_GIVES.map((m) => (
+                    <li key={m} className="flex items-start gap-2.5 text-sm text-ink-600">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink-300" />
+                      {m}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-white p-7">
+                <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-brand-600">
+                  The Cost Agent adds
+                </div>
+                <ul className="mt-4 space-y-2.5">
+                  {AGENT_ADDS.map((a) => (
+                    <li key={a} className="flex items-start gap-2.5 text-sm font-medium text-maroon">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+                      {a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.p {...fadeUp} className="mt-12 text-sm text-ink-500">
             Today: the ops team. Next: smarter bids for preconstruction, a live
             margin roll-up for finance.
           </motion.p>
