@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, ArrowRight, LayoutGrid, BarChart3 } from "lucide-react";
+import { Send, ArrowRight, LayoutGrid, BarChart3, ChevronLeft } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -47,6 +47,8 @@ export default function MarginWatch() {
     ],
   }));
   const [activeId, setActiveId] = useState<string>(OVERVIEW);
+  // Mobile master-detail: show the board, or the open thread (not both).
+  const [mobilePane, setMobilePane] = useState<"board" | "thread">("board");
 
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   // Starts at $0 and grows only as you act — no invented baseline.
@@ -106,9 +108,11 @@ export default function MarginWatch() {
       prev[job.id] ? prev : { ...prev, [job.id]: seedThread(job) }
     );
     setActiveId(job.id);
+    setMobilePane("thread");
   }
   function openOverview() {
     setActiveId(OVERVIEW);
+    setMobilePane("thread");
   }
 
   function chatHistory(): ChatMessage[] {
@@ -220,7 +224,12 @@ export default function MarginWatch() {
   return (
     <div className="grid h-[calc(100vh-3.5rem)] grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
       {/* Job board */}
-      <aside className="min-h-0 border-r border-ink-200">
+      <aside
+        className={cn(
+          "min-h-0 border-r border-ink-200 lg:block",
+          mobilePane === "thread" ? "hidden" : "block"
+        )}
+      >
         <JobBoard
           flagged={flagged}
           monitoring={monitoring}
@@ -235,8 +244,17 @@ export default function MarginWatch() {
       </aside>
 
       {/* Active thread */}
-      <div className="flex min-h-0 flex-col">
-        <ThreadHeader job={activeJob} resolved={activeJob ? resolved.has(activeJob.id) : false} />
+      <div
+        className={cn(
+          "min-h-0 flex-col lg:flex",
+          mobilePane === "board" ? "hidden" : "flex"
+        )}
+      >
+        <ThreadHeader
+          job={activeJob}
+          resolved={activeJob ? resolved.has(activeJob.id) : false}
+          onBack={() => setMobilePane("board")}
+        />
 
         <div className="scroll-thin flex-1 overflow-y-auto bg-ink-50/40 px-4 py-5 sm:px-6">
           <div className="mx-auto max-w-2xl space-y-4">
@@ -322,10 +340,28 @@ export default function MarginWatch() {
 
 /* ------------------------------------------------------------ subviews */
 
-function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean }) {
+function ThreadHeader({
+  job,
+  resolved,
+  onBack,
+}: {
+  job: Job | null;
+  resolved: boolean;
+  onBack: () => void;
+}) {
+  const Back = () => (
+    <button
+      onClick={onBack}
+      aria-label="Back to job board"
+      className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 lg:hidden"
+    >
+      <ChevronLeft className="h-5 w-5" />
+    </button>
+  );
   if (!job) {
     return (
-      <div className="flex items-center gap-2.5 border-b border-ink-200 bg-white px-4 py-3 sm:px-6">
+      <div className="flex items-center gap-2 border-b border-ink-200 bg-white px-3 py-3 sm:px-6">
+        <Back />
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
           <LayoutGrid className="h-4 w-4" />
         </div>
@@ -347,16 +383,19 @@ function ThreadHeader({ job, resolved }: { job: Job | null; resolved: boolean })
       ? { chip: "bg-amber-100 text-amber-700", label: "Watching" }
       : { chip: "bg-emerald-100 text-emerald-700", label: "On budget" };
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white px-4 py-3 sm:px-6">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-maroon">
-            Job {job.number}
-          </span>
-          <span className="truncate text-xs text-ink-500">· {job.name}</span>
-        </div>
-        <div className="text-[11px] text-ink-500">
-          {job.trade} · {job.region} · {Math.round(job.pctComplete * 100)}% installed
+    <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white px-3 py-3 sm:px-6">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Back />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-maroon">
+              Job {job.number}
+            </span>
+            <span className="truncate text-xs text-ink-500">· {job.name}</span>
+          </div>
+          <div className="text-[11px] text-ink-500">
+            {job.trade} · {job.region} · {Math.round(job.pctComplete * 100)}% installed
+          </div>
         </div>
       </div>
       <span
