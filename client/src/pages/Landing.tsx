@@ -52,10 +52,11 @@ const VALUE_SOON = [
 ];
 
 /* ---- Section 3 data: the problem, big numbers ----
- * All three from McKinsey Global Institute, "Reinventing Construction: A Route
- * to Higher Productivity" (Feb 2017) — the authoritative source on construction
- * productivity. The earlier labor/margin figures (Construction Cost Accounting,
- * CFMA, Projul, NCHRP) were dropped: vague or unverifiable provenance. */
+ * #1: McKinsey Global Institute, "Reinventing Construction" (2017) — industry-
+ * wide, size-neutral. #2: CFMA Construction Financial Benchmarker — contractor
+ * net margins run thin single digits (avg ~5%). The megaproject "80% over
+ * budget" figure was dropped: it describes large capital projects, not Miter's
+ * specialty/SMB buyer. */
 const STATS = [
   {
     value: "1%",
@@ -63,20 +64,45 @@ const STATS = [
     source: "McKinsey · Reinventing Construction, 2017",
   },
   {
-    value: "80%",
-    caption: "how far over budget large projects run",
-    source: "McKinsey · Reinventing Construction, 2017",
+    value: "5%",
+    caption: "a typical contractor's net margin — one over-run job can erase it",
+    source: "CFMA Construction Financial Benchmarker",
   },
 ];
 
+/* ---- "Miter gives you / the agent adds" — the credibility strip ---- */
+const MITER_GIVES = [
+  "Real-time cost-coded actuals vs budget",
+  "Fully-burdened costs",
+  "Portfolio job-cost reports",
+];
+const AGENT_ADDS = [
+  "Forecasts where each job lands — EAC, schedule-aware",
+  "Triages to the few jobs that matter, ranked",
+  "Watches autonomously — no dashboard to open",
+  "Takes the multi-step fix, on your approval",
+];
+
 /* ---- Section 4 data: the agent loop ---- */
-const OBJECTIVES = [
+type Objective = {
+  n: string;
+  kicker: string;
+  variant: "see" | "act" | "learn";
+  title: string;
+  objective: string;
+  footer: string[];
+  badge?: string;
+  body?: string;
+};
+const OBJECTIVES: Objective[] = [
   {
     n: "01",
     kicker: "SEE",
-    variant: "see" as const,
-    title: "Total cost visibility",
-    objective: "See everything, miss nothing.",
+    variant: "see",
+    title: "Cost-at-completion forecaster",
+    objective: "Know where every job lands.",
+    badge: "On Miter's data",
+    body: "Builds on Miter's real-time, cost-coded actual-vs-budget data. Adds what Miter doesn't: a schedule-aware cost-at-completion forecast (EAC) — read against % complete from Procore/P6 — plus autonomous per-cost-code drift detection that runs continuously, with no one opening a dashboard.",
     footer: ["Portfolio roll-up (WIP)", "Margin-protected tally", "Cash-flow forecast"],
   },
   {
@@ -141,9 +167,9 @@ export default function Landing() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="mt-8 max-w-2xl text-lg leading-relaxed text-ink-500"
           >
-            Your proactive cost agent watches labor cost on every job, surfaces
-            only what needs your judgment, and — on your approval — handles the
-            fix before the margin&apos;s gone.
+            Miter shows you the numbers. The agent watches them on every job,
+            surfaces only what needs your judgment, and — on your approval —
+            runs the fix before the margin&apos;s gone.
           </motion.p>
           <motion.div
             {...fadeUp}
@@ -184,8 +210,9 @@ export default function Landing() {
             {...fadeUp}
             className="mx-auto mt-16 max-w-2xl text-lg leading-relaxed text-ink-600 sm:text-xl"
           >
-            Jobs don&apos;t bleed margin in the abstract — they bleed when they
-            fall behind.
+            The numbers already live in Miter. What&apos;s missing is the
+            vigilance to watch every job, the judgment to rank them, and the
+            hands to act — and no one can, on every job at once.
           </motion.p>
         </div>
       </section>
