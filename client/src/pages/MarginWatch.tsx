@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Send, LayoutGrid, BarChart3, ChevronLeft, ChevronDown } from "lucide-react";
+import {
+  Send,
+  LayoutGrid,
+  BarChart3,
+  ChevronLeft,
+  ChevronDown,
+  ShieldCheck,
+} from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 import { FlagCard } from "@/components/marginwatch/FlagCard";
@@ -25,6 +32,9 @@ type Entry =
   | { id: number; kind: "overview" };
 
 const OVERVIEW = "overview";
+// Flags the agent holds back and surfaces one-per-resolve, in this order — the
+// "it never stops watching" drip. Three of them → six jobs surface in all.
+const INCOMING_IDS = ["j318", "j256", "j401"];
 const jobById = (id: string) => PORTFOLIO.find((j) => j.id === id);
 
 // Marks where the AI answer ends and the demo disclaimer begins (rendered muted).
@@ -34,7 +44,19 @@ const SEED_DISCLAIMER =
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function MarginWatch() {
-  const flagged = useMemo(() => flaggedJobs(), []);
+  // allFlagged holds all six; `flagged` is only what's been surfaced so far, so
+  // every count/answer below keeps reading the live, growing list for free.
+  const allFlagged = useMemo(() => flaggedJobs(), []);
+  const [surfaced, setSurfaced] = useState<Set<string>>(
+    () =>
+      new Set(
+        allFlagged.filter((j) => !INCOMING_IDS.includes(j.id)).map((j) => j.id)
+      )
+  );
+  const flagged = useMemo(
+    () => allFlagged.filter((j) => surfaced.has(j.id)),
+    [allFlagged, surfaced]
+  );
   const monitoring = useMemo(() => monitoringJobs(), []);
   const calm = useMemo(() => calmJobs(), []);
 
@@ -64,6 +86,20 @@ export default function MarginWatch() {
   const [protectedAmt, setProtectedAmt] = useState(0);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Proactive surfacing: a transient "NEW" highlight on the board, and a toast
+  // when the PM is heads-down on a different thread. dripRef caps the drip at 3.
+  const [newlySurfaced, setNewlySurfaced] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ id: number; jobId: string; text: string } | null>(
+    null
+  );
+  // True for the ~1.5s "agent is checking" beat right before a flag surfaces.
+  const [scanning, setScanning] = useState(false);
+  const dripRef = useRef(0);
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -288,6 +324,61 @@ export default function MarginWatch() {
     }
   }
 
+  /** Show the ~1.5s "scanning live actuals" beat, then surface the flag — so the
+   *  reveal feels like the agent caught it, landing ~5s after you cleared a job. */
+  function startScan() {
+    if (dripRef.current >= INCOMING_IDS.length) return;
+    setScanning(true);
+    window.setTimeout(surfaceNext, 1500);
+  }
+
+  /** Reveal the next held-back flag. On the overview the agent posts a proactive
+   *  heads-up message; if the PM is heads-down elsewhere, a 3s toast instead. */
+  function surfaceNext() {
+    setScanning(false);
+    const idx = dripRef.current;
+    if (idx >= INCOMING_IDS.length) return;
+    const id = INCOMING_IDS[idx];
+    dripRef.current = idx + 1;
+    const job = allFlagged.find((j) => j.id === id);
+    if (!job?.flag) return;
+    const f = job.flag;
+
+    setSurfaced((s) => new Set(s).add(id));
+    setNewlySurfaced(id);
+    window.setTimeout(
+      () => setNewlySurfaced((cur) => (cur === id ? null : cur)),
+      6000
+    );
+
+    const headline = `Job ${job.number} — ${job.name}: ${f.costCodeName} ${f.overPct}% over, ${usdK(
+      f.marginAtRisk
+    )} at risk`;
+
+    if (activeIdRef.current === OVERVIEW) {
+      setThreads((prev) => ({
+        ...prev,
+        [OVERVIEW]: [
+          ...(prev[OVERVIEW] ?? []),
+          {
+            id: nextId(),
+            kind: "agent",
+            text: `Heads up — a new job just crossed the line while you were working. ${headline}. ${cap(
+              f.recoverability
+            )} recoverability; I've added it to your queue on the left.\n\n${DISCLAIMER_SENTINEL}${SEED_DISCLAIMER}`,
+          },
+        ],
+      }));
+    } else {
+      const tid = nextId();
+      setToast({ id: tid, jobId: id, text: headline });
+      window.setTimeout(
+        () => setToast((t) => (t && t.id === tid ? null : t)),
+        3000
+      );
+    }
+  }
+
   function onResolved(job: Job, actionedDollars: number) {
     setResolved((s) => new Set(s).add(job.id));
     setProtectedAmt((p) => p + actionedDollars);
@@ -312,6 +403,12 @@ export default function MarginWatch() {
         { id: nextId(), kind: "agent", text: did + next },
       ],
     }));
+
+    // The agent keeps watching: ~3.5s of quiet, then a visible scan, then the
+    // next held-back flag surfaces at ~5s (up to 3) — the queue never feels done.
+    if (dripRef.current < INCOMING_IDS.length) {
+      window.setTimeout(startScan, 3500);
+    }
   }
 
   const activeJob = activeId === OVERVIEW ? null : jobById(activeId) ?? null;
@@ -386,6 +483,7 @@ export default function MarginWatch() {
           resolvedJobs={resolved}
           protectedAmt={protectedAmt}
           jobsMonitored={PORTFOLIO_STATS.jobsMonitored}
+          newlySurfaced={newlySurfaced}
           onSelectJob={openJob}
           onSelectOverview={openOverview}
         />
@@ -481,6 +579,47 @@ export default function MarginWatch() {
           </div>
         </div>
       </div>
+
+      {/* Scanning beat — the agent visibly checks live actuals for ~1.5s right
+          before a new flag surfaces, so the reveal reads as "it caught one." */}
+      {scanning && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 rounded-xl border border-ink-200 bg-white px-4 py-3 shadow-lift"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand-500" />
+          </span>
+          <span className="text-xs font-medium text-ink-600">
+            Margin Agent · scanning live actuals…
+          </span>
+        </motion.div>
+      )}
+
+      {/* Proactive-surfacing toast — shown only when the PM is heads-down on
+          another thread; auto-dismisses in 3s, click to jump to the new job. */}
+      {toast && (
+        <motion.button
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => {
+            const j = jobById(toast.jobId);
+            if (j) openJob(j);
+            setToast(null);
+          }}
+          className="fixed bottom-5 right-5 z-50 flex max-w-xs items-start gap-2.5 rounded-xl border border-brand-200 bg-white px-4 py-3 text-left shadow-lift"
+        >
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+            <ShieldCheck className="h-3 w-3" />
+          </span>
+          <span className="text-xs leading-snug">
+            <span className="block font-semibold text-maroon">New job needs you</span>
+            <span className="text-ink-500">{toast.text}</span>
+          </span>
+        </motion.button>
+      )}
     </div>
   );
 }

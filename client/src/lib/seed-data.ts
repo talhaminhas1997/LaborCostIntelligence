@@ -106,6 +106,67 @@ export const JOB_SEEDS: JobSeed[] = [
     ],
   },
 
+  /* ============================ INCOMING — held back by the app, surfaced
+   * one-per-resolve to give the "the agent never stops watching" feel. They're
+   * authored as real flags (drift + plan); MarginWatch reveals them over time. */
+
+  // Surfaces #1 — under-recovery: slab labor billable but not ticketed.
+  {
+    id: "j318",
+    number: "318",
+    name: "Northgate Distribution Center",
+    trade: "Concrete",
+    region: "Southwest",
+    contractValue: 2240000,
+    blendedRate: 72,
+    baselineMarginPct: 10.2,
+    weeksTotal: 13,
+    driver: { code: "03-300", kind: "under-recovery" },
+    lines: [
+      cc("03-300", "Slab placement", 1200, 1020, 440, 0.6),
+      cc("03-200", "Formwork", 700, 360, 160, 0.5),
+      cc("03-100", "Rebar / reinforcing", 500, 300, 120, 0.55),
+    ],
+  },
+
+  // Surfaces #2 — added-scope: extra metal framing directed in the field.
+  {
+    id: "j256",
+    number: "256",
+    name: "Elmwood Senior Living",
+    trade: "Drywall / Framing",
+    region: "Midwest",
+    contractValue: 1880000,
+    blendedRate: 70,
+    baselineMarginPct: 11.0,
+    weeksTotal: 15,
+    driver: { code: "09-220", kind: "added-scope" },
+    lines: [
+      cc("09-220", "Metal framing", 1400, 1020, 540, 0.52),
+      cc("09-250", "Gypsum board", 1800, 520, 360, 0.3),
+      cc("09-900", "Finishes", 900, 180, 120, 0.2),
+    ],
+  },
+
+  // Surfaces #3 — underbid: sitework grading bid ran light.
+  {
+    id: "j401",
+    number: "401",
+    name: "Granite Ridge Logistics",
+    trade: "Sitework",
+    region: "Mountain West",
+    contractValue: 2620000,
+    blendedRate: 74,
+    baselineMarginPct: 9.8,
+    weeksTotal: 17,
+    driver: { code: "31-200", kind: "underbid" },
+    lines: [
+      cc("31-200", "Earthwork / grading", 1500, 1080, 520, 0.52),
+      cc("31-100", "Site clearing", 500, 300, 120, 0.6),
+      cc("32-100", "Paving base", 800, 240, 200, 0.28),
+    ],
+  },
+
   /* ============================ MONITORING — drifting, not surfaced ====== */
 
   // Mostly sunk: late job, small $, low recoverable → watch, don't surface.

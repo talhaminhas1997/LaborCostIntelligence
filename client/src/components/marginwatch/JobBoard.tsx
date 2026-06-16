@@ -24,6 +24,7 @@ export function JobBoard({
   resolvedJobs,
   protectedAmt,
   jobsMonitored,
+  newlySurfaced,
   onSelectJob,
   onSelectOverview,
 }: {
@@ -34,6 +35,7 @@ export function JobBoard({
   resolvedJobs: Set<string>;
   protectedAmt: number;
   jobsMonitored: number;
+  newlySurfaced?: string | null;
   onSelectJob: (job: Job) => void;
   onSelectOverview: () => void;
 }) {
@@ -111,6 +113,7 @@ export function JobBoard({
                   job={job}
                   i={i}
                   active={activeThreadId === job.id}
+                  isNew={job.id === newlySurfaced}
                   onClick={() => onSelectJob(job)}
                 />
               ))}
@@ -223,22 +226,30 @@ function FlaggedRow({
   job,
   i,
   active,
+  isNew,
   onClick,
 }: {
   job: Job;
   i: number;
   active: boolean;
+  isNew?: boolean;
   onClick: () => void;
 }) {
   return (
     <motion.button
       initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: i * 0.05 }}
+      animate={
+        isNew
+          ? { opacity: 1, x: 0, backgroundColor: ["#ede9fe", "#ffffff"] }
+          : { opacity: 1, x: 0 }
+      }
+      transition={isNew ? { duration: 1.4, delay: 0.05 } : { delay: i * 0.05 }}
       onClick={onClick}
       className={cn(
         "w-full rounded-lg border p-2.5 text-left transition-all",
-        active
+        isNew
+          ? "border-brand-400 ring-1 ring-brand-300"
+          : active
           ? "border-maroon/40 bg-ink-50 shadow-sm"
           : "border-ink-200 bg-white hover:border-ink-300"
       )}
@@ -246,9 +257,14 @@ function FlaggedRow({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="flex h-4 w-4 items-center justify-center rounded bg-maroon text-[10px] font-semibold text-white">
-            {job.flag!.rank}
+            {i + 1}
           </span>
           <span className="text-xs font-semibold text-ink-800">Job {job.number}</span>
+          {isNew && (
+            <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand-700">
+              New
+            </span>
+          )}
         </div>
         <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-medium text-ink-500">
           {KIND_LABEL[job.flag!.kind]}
