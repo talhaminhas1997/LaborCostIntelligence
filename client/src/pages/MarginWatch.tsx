@@ -332,7 +332,7 @@ export default function MarginWatch() {
             { id: nextId(), kind: "typing" },
           ],
         }));
-      }, 700);
+      }, 300);
       window.setTimeout(() => {
         setThreads((prev) => ({
           ...prev,
@@ -345,20 +345,12 @@ export default function MarginWatch() {
                 p.why(f.costCodeName)
               )}. ${usdK(f.marginAtRisk)} at risk — ${f.recoverability} recoverability.`,
             },
-          ],
-        }));
-      }, 1700);
-
-      // Beat 2 — plan intro + CTA button
-      window.setTimeout(() => {
-        setThreads((prev) => ({
-          ...prev,
-          [job.id]: [
-            ...(prev[job.id] ?? []),
             { id: nextId(), kind: "typing" },
           ],
         }));
-      }, 2400);
+      }, 900);
+
+      // Beat 2 — plan intro + CTA button
       window.setTimeout(() => {
         setThreads((prev) => ({
           ...prev,
@@ -378,7 +370,7 @@ export default function MarginWatch() {
             },
           ],
         }));
-      }, 3700);
+      }, 1800);
     }
   }
 
