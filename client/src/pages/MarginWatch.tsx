@@ -42,7 +42,8 @@ type Entry =
   | { id: number; kind: "progress"; text: string }
   | { id: number; kind: "flag"; jobId: string }
   | { id: number; kind: "overview" }
-  | { id: number; kind: "cta"; action: "reveal-plan"; jobId: string; label: string };
+  | { id: number; kind: "cta"; action: "reveal-plan"; jobId: string; label: string }
+  | { id: number; kind: "cta"; action: "start-plan"; jobId: string; autonomous: boolean };
 
 const OVERVIEW = "overview";
 // Flags the agent holds back and surfaces one-per-resolve, in this order — the
@@ -390,7 +391,14 @@ export default function MarginWatch() {
           {
             id: nextId(),
             kind: "agent",
-            text: `There it is — ${visibleSteps} steps. I'll handle the reads and only stop at the calls that need your judgment. Ready to walk through it?`,
+            text: `There it is — ${visibleSteps} steps. I'll handle the reads and only stop at the calls that need your judgment.`,
+          },
+          {
+            id: nextId(),
+            kind: "cta",
+            action: "start-plan" as const,
+            jobId,
+            autonomous: false,
           },
         ],
       }));
@@ -532,31 +540,9 @@ export default function MarginWatch() {
         ],
       }));
 
-    // Start chips — user confirms they want to begin execution from the left panel.
-    const activeJobNow = jobById(activeId);
-    if (
-      activeJobNow?.flag &&
-      planRevealedByJob[activeId] &&
-      !executionStartedByJob[activeId] &&
-      flagCardRef.current &&
-      /walk.*through|run.*auto|let.*go|start|begin|yes\b|yeah|sure|ready|ok\b/i.test(q)
-    ) {
-      setExecutionStartedByJob((prev) => ({ ...prev, [activeId]: true }));
-      setSending(false);
-      setThreads((prev) => ({
-        ...prev,
-        [activeId]: (prev[activeId] ?? []).filter((e) => e.kind !== "typing"),
-      }));
-      if (/auto|just run|run it/i.test(q)) {
-        flagCardRef.current.startAutonomously();
-      } else {
-        flagCardRef.current.start();
-      }
-      return;
-    }
-
     // Plain-English plan edits ("skip the GC letter", "bill only $40k") are
     // handled by the living plan itself — it updates and the agent confirms.
+    const activeJobNow = jobById(activeId);
     if (activeJobNow?.flag && flagCardRef.current) {
       const edit = flagCardRef.current.applyPlanEdit(q);
       if (edit.ok) {
@@ -731,11 +717,6 @@ export default function MarginWatch() {
       );
     }
 
-    // Plan revealed but not yet started — invite the user to kick off
-    if (isFlaggedOpen && planVisible && activeJob && !executionStartedByJob[activeJob.id]) {
-      return ["Walk me through it", "Run it autonomously"];
-    }
-
     // Phase 3 — resolved
     if (activeJob?.flag && resolved.has(activeJob.id)) {
       return [
@@ -855,6 +836,31 @@ export default function MarginWatch() {
                       >
                         {e.label}
                         <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {e.kind === "cta" && e.action === "start-plan" && !executionStartedByJob[e.jobId] && (
+                    <div className="pl-9 flex gap-2">
+                      <button
+                        onClick={() => {
+                          setExecutionStartedByJob((prev) => ({ ...prev, [e.jobId]: true }));
+                          push({ kind: "user", text: "Walk me through it" });
+                          flagCardRef.current?.start();
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink-700"
+                      >
+                        Walk me through it
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setExecutionStartedByJob((prev) => ({ ...prev, [e.jobId]: true }));
+                          push({ kind: "user", text: "Run it autonomously" });
+                          flagCardRef.current?.startAutonomously();
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50"
+                      >
+                        Run it autonomously
                       </button>
                     </div>
                   )}
