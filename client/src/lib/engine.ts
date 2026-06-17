@@ -665,3 +665,72 @@ export function buildPortfolio(): { jobs: Job[]; learnings: Learning[] } {
 
   return { jobs, learnings: SEED_LEARNINGS };
 }
+
+/* ====================================================== approval gating
+ * The agent works reads + forecasts on its own, but it never updates another
+ * system or finalizes an outbound piece without the PM's approval. Each step's
+ * gate category is derived from what it touches — no per-step config needed.
+ * GATE_META carries the consultant framing: what's at stake + how it's de-risked.
+ * ====================================================================== */
+
+export type GateCategory =
+  | "judgment" // a decision only the PM can make
+  | "money" // commits a dollar figure (change order / billing)
+  | "external-msg" // a draft that leaves the company (GC / owner)
+  | "internal-msg" // a draft to the PM / field
+  | "estimating" // writes back to the estimating benchmark
+  | "budget"; // updates the live EAC / budget
+
+export function stepGate(step: ActionStep): {
+  needsGate: boolean;
+  category: GateCategory | null;
+} {
+  if (step.decision) return { needsGate: true, category: "judgment" };
+  if (step.targetsDollars > 0) return { needsGate: true, category: "money" };
+  if (step.draft)
+    return {
+      needsGate: true,
+      category: step.draft.internal ? "internal-msg" : "external-msg",
+    };
+  // Benchmark write-backs run silently on job completion — no gate needed.
+  if (step.feedsBenchmark) return { needsGate: false, category: null };
+  if (step.systems?.some((s) => s.mode === "write"))
+    return { needsGate: true, category: "budget" };
+  return { needsGate: false, category: null };
+}
+
+export const GATE_META: Record<
+  GateCategory,
+  { label: string; blurb: string; risk: string }
+> = {
+  judgment: {
+    label: "Judgment calls",
+    blurb: "Decisions only you can make — entitlement, billable basis, diagnosis.",
+    risk: "I've recommended the call I'd make and why — but the read is yours.",
+  },
+  money: {
+    label: "Money & billing",
+    blurb: "Committing a dollar figure — change orders, T&M billing.",
+    risk: "I've sized it to the change-tied work only — not the full overrun — so it holds up under review.",
+  },
+  "external-msg": {
+    label: "Messages that leave the company",
+    blurb: "Emails or letters to the GC or owner.",
+    risk: "Nothing sends from here — you get the draft to send, with the backup attached so it's defensible.",
+  },
+  "internal-msg": {
+    label: "Notes to your team",
+    blurb: "Briefs and directives to your PM / field.",
+    risk: "Internal only — it's yours to forward when you're ready.",
+  },
+  estimating: {
+    label: "Estimating write-backs",
+    blurb: "Writing the true rate back to your estimating benchmark.",
+    risk: "This only sharpens future bids — it doesn't touch this job's numbers.",
+  },
+  budget: {
+    label: "Budget & forecast updates",
+    blurb: "Updating the live EAC / budget in your ERP.",
+    risk: "Reversible — it moves the forecast, not an external commitment.",
+  },
+};

@@ -23,7 +23,7 @@ export function Wordmark({
       <Logo className="h-7 w-7" />
       <span className="hidden leading-tight sm:inline">
         <span className="block text-sm font-semibold tracking-tight text-maroon">
-          Margin Agent
+          Margin Protection Agent
         </span>
       </span>
     </button>

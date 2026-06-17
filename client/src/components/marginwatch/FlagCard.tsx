@@ -1,5 +1,12 @@
-import { useRef, useState } from "react";
-import { motion } from "framer-motion";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
@@ -23,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { chat } from "@/lib/api";
 import { cn, fmt, usd, usdK } from "@/lib/utils";
+import { stepGate, GATE_META, type GateCategory } from "@/lib/engine";
 import type { ActionStep, CostCodeProjection, Job } from "@/lib/types";
 
 type StepState = "pending" | "running" | "done" | "skipped" | "awaiting";
@@ -32,13 +40,30 @@ type StepState = "pending" | "running" | "done" | "skipped" | "awaiting";
  * and (on approval) the steps executing one-by-one with artifacts, then the
  * margin recovering and a benchmark write-back that closes the loop.
  */
-export function FlagCard({
-  job,
-  onResolved,
-}: {
-  job: Job;
-  onResolved: (job: Job, actionedDollars: number) => void;
-}) {
+export type FlagCardHandle = {
+  /** Apply a plain-English plan edit from the conversation. Returns whether it
+   *  was handled and the line the agent should reply with. */
+  applyPlanEdit: (text: string) => { ok: boolean; reply: string };
+};
+
+export const FlagCard = forwardRef<
+  FlagCardHandle,
+  {
+    job: Job;
+    onResolved: (job: Job, actionedDollars: number) => void;
+    /** Push a short progress line into the conversation as the agent works. */
+    onNarrate?: (text: string) => void;
+    /** Per-category approval preference, shared across the session. */
+    autonomy?: Record<GateCategory, "ask" | "auto">;
+    setCategoryAuto?: (c: GateCategory) => void;
+    /** Where to render the approval gate — a slot above the conversation's
+     *  chat bar, so all agent→PM input stays on the left. */
+    gateSlot?: HTMLElement | null;
+  }
+>(function FlagCard(
+  { job, onResolved, onNarrate, autonomy, setCategoryAuto, gateSlot },
+  ref
+) {
   const flag = job.flag!;
   const actionIdx = flag.plan.findIndex((p) => p.targetsDollars > 0);
   const [phase, setPhase] = useState<"proposed" | "review" | "executing" | "done">(
@@ -85,6 +110,30 @@ export function FlagCard({
   const branchSkipRef = useRef<Set<number>>(new Set());
   // Synchronous "no more pausing" flag for the recursive runner.
   const autoRef = useRef(false);
+  // The step the runner is paused on for approval + the slide-up gate it shows.
+  const [gatePanel, setGatePanel] = useState<{
+    idx: number;
+    category: GateCategory;
+  } | null>(null);
+  const [gateEditing, setGateEditing] = useState(false);
+  // Steps the PM has already approved this run — never re-gate on re-entry.
+  const gateClearedRef = useRef<Set<number>>(new Set());
+
+  // What (if anything) this step must stop for: a decision, a write, a draft,
+  // or money — unless we're running autonomously, the PM already cleared it, or
+  // they've set that whole category to "auto".
+  function gateFor(idx: number): GateCategory | null {
+    if (autoRef.current) return null;
+    if (gateClearedRef.current.has(idx)) return null;
+    const step = flag.plan[idx];
+    // Decision steps gate as "judgment" so the question appears on the left,
+    // not inline in the right plan panel.
+    if (step.decision) return autonomy?.judgment === "auto" ? null : "judgment";
+    const g = stepGate(step);
+    if (!g.needsGate || !g.category) return null;
+    if (autonomy?.[g.category] === "auto") return null;
+    return g.category;
+  }
 
   // $ actually committed by the financial action (edited, or 0 if skipped).
   const actionedDollars = () => {
@@ -159,10 +208,14 @@ export function FlagCard({
       return;
     }
     const step = flag.plan[idx];
-    if (step.decision && !autoRef.current) {
+    // Writes / drafts / money / decisions pause for approval; reads run silently.
+    const gate = gateFor(idx);
+    if (gate) {
       setStep(idx, "awaiting");
       setAwaiting(idx);
-      return; // wait for decide() / turnAutonomous()
+      setGateEditing(false);
+      setGatePanel({ idx, category: gate });
+      return; // wait for approveGate() / skipGate() / turnAutonomous()
     }
     setStep(idx, "running");
     window.setTimeout(() => {
@@ -174,6 +227,11 @@ export function FlagCard({
         }));
         applySkips(idx, rec); // autonomous mode takes the recommended branch
         applyAdjust(idx, rec);
+        onNarrate?.(`→ ${step.decision.options[rec]}`);
+      } else if (step.feedsBenchmark) {
+        onNarrate?.(`↺ ${step.artifact?.trim() || step.label}`);
+      } else {
+        onNarrate?.(`✓ ${step.artifact?.trim() || step.label}`);
       }
       setStep(idx, "done");
       window.setTimeout(() => runAuto(idx + 1), 300);
@@ -187,6 +245,103 @@ export function FlagCard({
     runAuto(0);
   }
 
+  // Walk-through: on open, the agent starts walking you through after a beat —
+  // no "Start" button. It runs the reads itself and stops at the first call.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (!startedRef.current) {
+        startedRef.current = true;
+        approveAndRun();
+      }
+    }, 1100);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Conversational plan edits (driven from the chat on the left) --------
+  function targetStepFromText(s: string): number {
+    if (/\bgc\b|letter|hand[- ]?off|submit to|to the gc/.test(s))
+      return flag.plan.findIndex((p) => p.draft && !p.draft.internal);
+    if (/brief|field|foreman|superintendent|\bpm\b|team|directive|internal/.test(s))
+      return flag.plan.findIndex((p) => !!p.draft?.internal);
+    if (/change[- ]?order|\bcor\b|\bco\b/.test(s))
+      return flag.plan.findIndex((p) => /change order/i.test(p.label));
+    if (/t&?m|ticket|billing/.test(s))
+      return flag.plan.findIndex((p) => /t&m|ticket/i.test(p.label));
+    if (/benchmark|estimat/.test(s))
+      return flag.plan.findIndex((p) => !!p.feedsBenchmark);
+    if (/budget|forecast|reforecast|eac/.test(s))
+      return flag.plan.findIndex((p) => /budget|reforecast/i.test(p.label));
+    return -1;
+  }
+
+  function applyPlanEdit(text: string): { ok: boolean; reply: string } {
+    const s = text.toLowerCase();
+    const moneyIdx = flag.plan.findIndex((p) => p.targetsDollars > 0);
+    const verb = (label: string) => label.split(" · ")[0].toLowerCase();
+
+    // Re-price the money step: "bill only $40k", "make it 50000", "cap at $30k"
+    const amtMatch = s.match(/\$?\s*([\d][\d.,]*)\s*(k)?/);
+    if (
+      moneyIdx >= 0 &&
+      amtMatch &&
+      /\b(bill|charge|change|make|only|set|cap|reduce|just|lower|to)\b/.test(s)
+    ) {
+      let amt = Number(amtMatch[1].replace(/,/g, ""));
+      if (amtMatch[2] === "k" || amt < 1000) amt = amt * 1000;
+      amt = Math.round(amt);
+      if (amt > 0) {
+        if (steps[moneyIdx] === "done" || skippedRef.current.has(moneyIdx))
+          return {
+            ok: true,
+            reply: `The ${verb(flag.plan[moneyIdx].label)} already went through this run — I can't reprice it now.`,
+          };
+        amountsRef.current[moneyIdx] = amt;
+        setAmounts((a) => ({ ...a, [moneyIdx]: amt }));
+        return {
+          ok: true,
+          reply: `Got it — I'll bill ${usd(amt)} on the ${verb(
+            flag.plan[moneyIdx].label
+          )} (was ${usd(
+            flag.plan[moneyIdx].targetsDollars
+          )}); the rest stays absorbed. Updated on the right.`,
+        };
+      }
+    }
+
+    // Drop a step: "skip the GC letter", "don't email the field", "drop the brief"
+    if (
+      /\b(skip|drop|don'?t|do not|no need|cancel|remove|leave out|hold off|without|forget)\b/.test(
+        s
+      )
+    ) {
+      const idx = targetStepFromText(s);
+      if (idx < 0) return { ok: false, reply: "" };
+      if (steps[idx] === "done")
+        return {
+          ok: true,
+          reply: `${flag.plan[idx].label} already ran — too late to pull it back this round.`,
+        };
+      if (steps[idx] === "skipped" || branchSkipRef.current.has(idx))
+        return { ok: true, reply: `${flag.plan[idx].label} is already off the plan.` };
+      branchSkipRef.current.add(idx);
+      skippedRef.current.add(idx);
+      setStep(idx, "skipped");
+      setConfirms((c) => ({ ...c, [idx]: "Skipped — your call." }));
+      return {
+        ok: true,
+        reply: `Done — I'll skip ${flag.plan[
+          idx
+        ].label.toLowerCase()}. Took it off the plan on the right.`,
+      };
+    }
+
+    return { ok: false, reply: "" };
+  }
+
+  useImperativeHandle(ref, () => ({ applyPlanEdit }));
+
   /** Run the whole plan without stopping — agent takes every recommended call. */
   function runAutonomously() {
     autoRef.current = true;
@@ -197,8 +352,11 @@ export function FlagCard({
   /** A decision is made — from an executing pause, or the step-through path. */
   function decide(idx: number, optionText: string, optionIndex: number) {
     if (refining) return;
+    setGatePanel(null);
+    gateClearedRef.current.add(idx);
     setConfirms((c) => ({ ...c, [idx]: `→ ${optionText}` }));
     setStep(idx, "done");
+    onNarrate?.(`→ ${optionText}`);
     applySkips(idx, optionIndex); // reshape the plan to the PM's call
     applyAdjust(idx, optionIndex); // re-price the financial step if needed
     if (awaiting === idx) {
@@ -236,6 +394,7 @@ export function FlagCard({
   // path doesn't call applyAdjust).
   function confirmSplit() {
     if (!splitDraft) return;
+    setGatePanel(null);
     const { decisionIdx, optionIndex, optionText, pct } = splitDraft;
     const t = adjustTarget(decisionIdx, optionIndex);
     if (t) {
@@ -245,6 +404,7 @@ export function FlagCard({
     }
     setConfirms((c) => ({ ...c, [decisionIdx]: `→ ${optionText} · billing ${pct}%` }));
     setStep(decisionIdx, "done");
+    onNarrate?.(`→ ${optionText} · billing ${pct}%`);
     applySkips(decisionIdx, optionIndex);
     setSplitDraft(null);
     if (awaiting === decisionIdx) {
@@ -261,8 +421,47 @@ export function FlagCard({
     autoRef.current = true;
     const idx = awaiting != null ? awaiting : reviewIdx;
     setAwaiting(null);
+    setGatePanel(null);
     setPhase("executing");
     runAuto(idx);
+  }
+
+  /** Approve a non-decision gate (a write / draft / money step) → run it now. */
+  function approveGate() {
+    if (!gatePanel) return;
+    const idx = gatePanel.idx;
+    gateClearedRef.current.add(idx);
+    setGatePanel(null);
+    setGateEditing(false);
+    setAwaiting(null);
+    runAuto(idx); // re-enter; gateFor() now clears it
+  }
+
+  /** Skip the gated step entirely. */
+  function skipGate() {
+    if (!gatePanel) return;
+    const idx = gatePanel.idx;
+    skippedRef.current.add(idx);
+    setStep(idx, "skipped");
+    setConfirms((c) => ({ ...c, [idx]: "Skipped — not taken on your call." }));
+    onNarrate?.(`✓ Skipped ${flag.plan[idx].label.toLowerCase()} — your call`);
+    setGatePanel(null);
+    setGateEditing(false);
+    setAwaiting(null);
+    window.setTimeout(() => runAuto(idx + 1), 200);
+  }
+
+  /** "Don't ask again for {category}" → set it auto, then proceed this step. */
+  function dontAskAgain() {
+    if (!gatePanel) return;
+    const { idx, category } = gatePanel;
+    setCategoryAuto?.(category);
+    if (flag.plan[idx].decision) {
+      const rec = flag.plan[idx].decision!.recommended;
+      chooseOption(idx, rec, flag.plan[idx].decision!.options[rec]);
+    } else {
+      approveGate();
+    }
   }
 
   // Has the PM changed anything about this step (amount or instruction)?
@@ -428,15 +627,67 @@ export function FlagCard({
 
   const atStakePts = (flag.marginNow - flag.marginAtCompletion).toFixed(1);
 
+  // Benchmark steps run silently and are hidden from the visible plan list.
+  const benchmarkIndices = new Set(
+    flag.plan.map((p, i) => (p.feedsBenchmark ? i : -1)).filter((i) => i >= 0)
+  );
+  const benchmarkRan = flag.plan.some(
+    (p, i) => p.feedsBenchmark && steps[i] === "done"
+  );
+
+  // High-level progress for the living-plan progress bar.
+  // Benchmark steps run silently — excluded from visible counts.
+  const total = flag.plan.length - benchmarkIndices.size;
+  const doneCount = steps.filter(
+    (s, i) => (s === "done" || s === "skipped") && !benchmarkIndices.has(i)
+  ).length;
+  const activeIdx = steps.findIndex((s) => s === "running" || s === "awaiting");
+  const currentLabel =
+    activeIdx >= 0
+      ? flag.plan[activeIdx].label
+      : phase === "review"
+      ? flag.plan[reviewIdx]?.label ?? ""
+      : "";
+  const nextPendingIdx = steps.findIndex(
+    (s, i) => s === "pending" && !benchmarkIndices.has(i)
+  );
+  const nextPendingLabel =
+    nextPendingIdx >= 0 ? flag.plan[nextPendingIdx].label : "";
+  const remainingCount = steps.filter(
+    (s, i) => s === "pending" && !benchmarkIndices.has(i)
+  ).length;
+
   // Outcome summary (reflects per-step edits/skips from the Review-each path).
-  const ranCount = steps.filter((s) => s === "done").length;
-  const skippedCount = steps.filter((s) => s === "skipped").length;
+  const ranCount = steps.filter((s, i) => s === "done" && !benchmarkIndices.has(i)).length;
+  const skippedCount = steps.filter((s, i) => s === "skipped" && !benchmarkIndices.has(i)).length;
   const actionRan = actionIdx >= 0 && steps[actionIdx] === "done";
   const actionVerb = actionIdx >= 0 ? flag.plan[actionIdx].label.split(" · ")[0] : "";
   const actionAmt =
     actionIdx >= 0 ? amounts[actionIdx] ?? flag.plan[actionIdx].targetsDollars : 0;
 
+  const gateStep = gatePanel ? flag.plan[gatePanel.idx] : null;
+  const gateAmt =
+    gatePanel && gateStep
+      ? Math.round(amounts[gatePanel.idx] ?? gateStep.targetsDollars)
+      : 0;
+  // Use the step's own detail text — it has the actual context (what's changing,
+  // what numbers, why). Fall back to a category-level description if missing.
+  const gateAsk =
+    !gatePanel || !gateStep
+      ? ""
+      : gateStep.detail ||
+        (gatePanel.category === "money"
+          ? `Approve to draft; I've sized it to the change-tied work, not the full overrun.`
+          : gatePanel.category === "external-msg"
+          ? "I've drafted this for the GC — give it a read. Approve and it's yours to send; nothing leaves the platform without you."
+          : gatePanel.category === "internal-msg"
+          ? "Here's the note for your team. Approve and it's ready for you to forward."
+          : gatePanel.category === "estimating"
+          ? `Ready to write the true ${flag.costCodeName} rate back to your estimating benchmark, so the next bid isn't light.`
+          : "Ready to update your live budget and forecast. Approve and I'll write it.");
+
   return (
+    <>
     <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-soft">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-ink-100 bg-ink-50/60 px-4 py-3">
@@ -445,8 +696,8 @@ export function FlagCard({
             className={cn(
               "mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg",
               phase === "done"
-                ? "bg-emerald-100 text-emerald-600"
-                : "bg-rose-100 text-rose-600"
+                ? "bg-ink-100 text-ink-600"
+                : "bg-ink-100 text-ink-600"
             )}
           >
             {phase === "done" ? (
@@ -457,7 +708,7 @@ export function FlagCard({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-sm font-semibold text-maroon">
+              <span className="text-sm font-semibold text-ink-700">
                 Job {job.number}
               </span>
               <span className="text-xs text-ink-400">·</span>
@@ -471,7 +722,7 @@ export function FlagCard({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] uppercase tracking-wide text-ink-400">Rank</div>
-          <div className="tabular text-sm font-semibold text-maroon">
+          <div className="tabular text-sm font-semibold text-ink-700">
             #{flag.rank}
           </div>
         </div>
@@ -481,78 +732,100 @@ export function FlagCard({
       <div className="px-4 py-3.5">
         <p className="text-sm font-medium text-ink-800">{flag.summary}</p>
 
-        {/* Temporal — caught early, trending up */}
-        <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-500">
-          <Clock className="h-3 w-3 shrink-0 text-rose-400" />
-          <span>
-            First flagged <span className="font-medium text-ink-600">{flag.detectedWeeksAgo} weeks ago</span> · drift widening
+        {/* Compact one-line read — the full numbers tuck into Details */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-500">
+          <span className="tabular font-medium text-ink-700">
+            {usdK(flag.marginAtRisk)} at risk
           </span>
-          <Sparkline data={flag.trend} />
+          <span className="text-ink-300">·</span>
+          <span className="tabular">
+            margin {flag.marginNow}% → {flag.marginAtCompletion}%
+          </span>
+          <span className="text-ink-300">·</span>
+          <span className="capitalize">{flag.recoverability} recoverability</span>
+          <button
+            onClick={() => setShowCodes((s) => !s)}
+            className="ml-auto inline-flex items-center gap-0.5 font-medium text-ink-400 hover:text-ink-700"
+          >
+            {showCodes ? "Hide" : "Details"}
+            <ChevronDown
+              className={cn(
+                "h-3 w-3 transition-transform",
+                !showCodes && "-rotate-90"
+              )}
+            />
+          </button>
         </div>
 
-        {/* Metrics */}
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric label="Over budget" value={`${flag.overPct}%`} tone="danger" />
-          <Metric label="Projected overrun" value={usdK(flag.marginAtRisk)} tone="danger" />
-          <Metric
-            label="Recoverability"
-            value={flag.recoverability}
-            tone="brand"
-            capitalize
-          />
-          <Metric label="Time to act" value={`${flag.weeksLeftToAct} wks`} tone="neutral" />
-        </div>
-
-        {/* Margin projection */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-2.5">
-          <TrendingDown className="h-4 w-4 shrink-0 text-rose-500" />
-          <div className="tabular flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-ink-500">Margin</span>
-            <span className="font-semibold text-ink-700">{flag.marginNow}%</span>
-            <ArrowRight className="h-3.5 w-3.5 text-ink-400" />
-            <span className="font-semibold text-rose-600">
-              {flag.marginAtCompletion}%
-            </span>
-            <span className="text-xs text-ink-400">
-              if unaddressed · {atStakePts} pts at stake
-            </span>
-          </div>
-        </div>
-
-        {/* Cost-code drill-down — the forecast at the cost-code level */}
-        <button
-          onClick={() => setShowCodes((s) => !s)}
-          className="mt-3 flex items-center gap-1 text-xs font-medium text-maroon hover:text-maroon/70"
-        >
-          {showCodes ? (
-            <ChevronDown className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5" />
-          )}
-          Cost-code breakdown · {job.costLines.length} codes
-        </button>
         {showCodes && (
-          <CostCodeTable lines={job.costLines} driverCode={flag.costCode} />
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center gap-2 text-[11px] text-ink-500">
+              <Clock className="h-3 w-3 shrink-0 text-ink-400" />
+              <span>
+                First flagged{" "}
+                <span className="font-medium text-ink-600">
+                  {flag.detectedWeeksAgo} weeks ago
+                </span>{" "}
+                · drift widening · {atStakePts} pts at stake
+              </span>
+              <Sparkline data={flag.trend} />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Metric label="Over budget" value={`${flag.overPct}%`} tone="danger" />
+              <Metric label="Projected overrun" value={usdK(flag.marginAtRisk)} tone="danger" />
+              <Metric label="Recoverability" value={flag.recoverability} tone="brand" capitalize />
+              <Metric label="Time to act" value={`${flag.weeksLeftToAct} wks`} tone="neutral" />
+            </div>
+            <CostCodeTable lines={job.costLines} driverCode={flag.costCode} />
+          </div>
         )}
 
         {/* Plan */}
         <div className="mt-3.5">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs font-semibold text-ink-700">
-              Proposed plan · {flag.plan.length} steps
+            <span className="text-xs font-semibold text-ink-700">Plan</span>
+            <span className="text-[11px] text-ink-400">
+              {phase === "done"
+                ? "Resolved"
+                : phase === "proposed"
+                ? "starting…"
+                : `Step ${Math.min(doneCount + 1, total)} of ${total}`}
             </span>
-            {phase === "proposed" && (
-              <span className="text-[11px] text-ink-400">approval required</span>
-            )}
           </div>
+
+          {/* High-level progress — the agent driving the job to completion */}
+          {phase !== "proposed" && (
+            <div className="mb-2.5">
+              <div className="flex h-1.5 overflow-hidden rounded-full bg-ink-100">
+                <motion.div
+                  className="bg-ink-600"
+                  animate={{ width: `${(doneCount / total) * 100}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+              {phase !== "done" && currentLabel && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-500">
+                  {activeIdx >= 0 && steps[activeIdx] === "awaiting" ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink-500" />
+                  ) : (
+                    <Loader2 className="h-3 w-3 animate-spin text-ink-400" />
+                  )}
+                  {currentLabel}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             {flag.plan.map((step, i) => {
               const st = steps[i];
               const isReviewCurrent = phase === "review" && reviewIdx === i;
               const isAwaiting = st === "awaiting";
-              // A decision needs the PM's input when it's the current review step
-              // or the auto-runner has paused on it.
-              const showDecide = !!step.decision && (isReviewCurrent || isAwaiting);
+              // Benchmark steps run silently — never shown in the plan list.
+              if (step.feedsBenchmark) return null;
+              // Progressive reveal — the plan consolidates as the agent walks
+              // you through it; upcoming steps stay hidden until reached.
+              if (st === "pending" && !isReviewCurrent) return null;
               return (
                 <div
                   key={step.id}
@@ -563,7 +836,7 @@ export function FlagCard({
                       : st === "done"
                       ? step.feedsBenchmark
                         ? "border-ink-200 bg-ink-50"
-                        : "border-emerald-200 bg-emerald-50/60"
+                        : "border-ink-200 bg-ink-50"
                       : st === "running"
                       ? "border-ink-300 bg-ink-50"
                       : isReviewCurrent || isAwaiting
@@ -580,11 +853,7 @@ export function FlagCard({
                         decision={!!step.decision}
                       />
                     </div>
-                    <div
-                      className="min-w-0 flex-1"
-                      onDoubleClick={() => toggleChat(i)}
-                      title="Double-click to ask about this step"
-                    >
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <span
@@ -595,37 +864,25 @@ export function FlagCard({
                           >
                             {step.label}
                           </span>
-                          {step.decision && st === "pending" && (
-                            <span className="shrink-0 rounded-full border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-maroon">
+                          {step.decision && (st === "pending" || st === "awaiting") && (
+                            <span className="shrink-0 rounded-full border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-700">
                               your call
                             </span>
                           )}
                         </span>
-                        {step.targetsDollars > 0 && (
+                        {step.targetsDollars > 0 && (st === "awaiting" || st === "done") && (
                           <span className="tabular shrink-0 text-xs font-medium text-ink-500">
-                            targets {usdK(amounts[i] ?? step.targetsDollars)}
+                            {usd(amounts[i] ?? step.targetsDollars)}
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-ink-500">{step.detail}</div>
-
-                      {/* Systems this step touches — read vs write, for confidence */}
-                      {step.systems && step.systems.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                          {step.systems.map((s, si) => (
-                            <SystemChip key={si} system={s} />
-                          ))}
-                        </div>
-                      )}
                       {(st === "done" || st === "skipped") && (
                         <div
                           className={cn(
                             "mt-1 flex items-center gap-1 text-[11px] font-medium",
                             st === "skipped"
                               ? "text-ink-400"
-                              : step.feedsBenchmark
-                              ? "text-maroon"
-                              : "text-emerald-600"
+                              : "text-ink-600"
                           )}
                         >
                           {st === "done" && step.feedsBenchmark && (
@@ -634,259 +891,8 @@ export function FlagCard({
                           {confirms[i] ?? step.artifact}
                         </div>
                       )}
-                      {st === "running" && (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium text-maroon">
-                          {refining && <Loader2 className="h-3 w-3 animate-spin" />}
-                          {refining ? "Margin Agent is revising…" : "Executing…"}
-                        </div>
-                      )}
-
-                      {/* Hand-off: an artifact the agent can't send. It drafts
-                          it and gives the PM the copy-ready text to send. */}
-                      {step.draft && st !== "pending" && st !== "skipped" && (
-                        <div className="mt-2">
-                          <button
-                            onClick={() =>
-                              setOpenDrafts((o) => ({ ...o, [i]: !o[i] }))
-                            }
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-maroon hover:text-maroon/70"
-                          >
-                            {openDrafts[i] ? (
-                              <ChevronDown className="h-3 w-3" />
-                            ) : (
-                              <ChevronRight className="h-3 w-3" />
-                            )}
-                            <Mail className="h-3 w-3" />
-                            View the drafted {step.draft.kind} —{" "}
-                            {step.draft.internal
-                              ? "yours to send to your team"
-                              : "yours to send"}
-                          </button>
-                          {openDrafts[i] && (
-                            <div className="mt-1.5 rounded-lg border border-ink-200 bg-white p-3">
-                              <div className="space-y-0.5 border-b border-ink-100 pb-2 text-[11px]">
-                                <div>
-                                  <span className="text-ink-400">To </span>
-                                  <span className="text-ink-600">{step.draft.to}</span>
-                                </div>
-                                <div>
-                                  <span className="text-ink-400">Subject </span>
-                                  <span className="font-medium text-ink-700">
-                                    {step.draft.subject}
-                                  </span>
-                                </div>
-                              </div>
-                              <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink-600">
-                                {step.draft.body}
-                              </pre>
-                              <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-2.5">
-                                <button
-                                  onClick={() => copyDraft(i, step.draft!)}
-                                  className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] font-medium text-ink-600 transition-colors hover:border-ink-300 hover:text-maroon"
-                                >
-                                  {copied === i ? (
-                                    <>
-                                      <Check className="h-3 w-3 text-emerald-600" /> Copied
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="h-3 w-3" /> Copy
-                                    </>
-                                  )}
-                                </button>
-                                <span className="text-[10px] text-ink-400">
-                                  {step.draft.internal
-                                    ? "Margin Agent can’t send for you — copy it to your PM / field."
-                                    : "Margin Agent can’t send for you — paste into Procore or email to submit."}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Drill-in: open a short conversation about this step */}
-                      {st !== "skipped" && (
-                        <button
-                          onClick={() => toggleChat(i)}
-                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-ink-400 transition-colors hover:text-maroon"
-                        >
-                          <MessageSquare className="h-3 w-3" />
-                          {chatOpen === i ? "Hide" : "Ask about this step"}
-                          {stepMsgs[i]?.length ? (
-                            <span className="text-ink-400">
-                              · {stepMsgs[i].filter((m) => m.role === "user").length}
-                            </span>
-                          ) : null}
-                        </button>
-                      )}
                     </div>
                   </div>
-
-                  {chatOpen === i && (
-                    <div className="mt-2.5 rounded-lg border border-ink-200 bg-ink-50/60 p-2.5">
-                      {stepMsgs[i]?.length ? (
-                        <div className="mb-2 space-y-2">
-                          {stepMsgs[i].map((m, mi) => (
-                            <div
-                              key={mi}
-                              className={cn(
-                                "flex",
-                                m.role === "user" ? "justify-end" : "justify-start"
-                              )}
-                            >
-                              <div
-                                className={cn(
-                                  "max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed",
-                                  m.role === "user"
-                                    ? "bg-ink-500 text-white"
-                                    : "border border-ink-200 bg-white text-ink-700"
-                                )}
-                              >
-                                {m.content}
-                              </div>
-                            </div>
-                          ))}
-                          {chatBusy === i && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-ink-400">
-                              <Loader2 className="h-3 w-3 animate-spin" /> Margin Agent
-                              is thinking…
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="mb-2 text-[11px] text-ink-400">
-                          Ask why this step, the amount, what the systems do, or what
-                          happens if it&apos;s rejected.
-                        </p>
-                      )}
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          value={chatDraft[i] || ""}
-                          onChange={(e) =>
-                            setChatDraft((d) => ({ ...d, [i]: e.target.value }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") sendStepChat(i);
-                          }}
-                          placeholder="Ask about this step…"
-                          className="h-8 flex-1 rounded-md border border-ink-200 bg-white px-2.5 text-xs outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
-                        />
-                        <button
-                          onClick={() => sendStepChat(i)}
-                          disabled={chatBusy === i || !(chatDraft[i] || "").trim()}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-ink-500 text-white transition-colors hover:bg-maroon/90 disabled:opacity-40"
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {showDecide && (
-                    <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
-                      <p className="text-xs font-medium text-ink-700">
-                        {step.decision!.question}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {step.decision!.options.map((opt, oi) => (
-                          <button
-                            key={opt}
-                            onClick={() => chooseOption(i, oi, opt)}
-                            className={cn(
-                              "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                              splitDraft?.decisionIdx === i &&
-                                splitDraft?.optionIndex === oi
-                                ? "border-maroon/40 bg-ink-100 text-maroon ring-1 ring-ink-200"
-                                : oi === step.decision!.recommended
-                                ? "border-ink-300 bg-ink-50 text-maroon hover:bg-ink-100"
-                                : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
-                            )}
-                          >
-                            {opt}
-                            {step.decision!.adjust?.[oi] && (
-                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
-                                set %
-                              </span>
-                            )}
-                            {oi === step.decision!.recommended && (
-                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
-                                rec
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Partial-bill control — the PM dials in the billable split */}
-                      {splitDraft?.decisionIdx === i &&
-                        (() => {
-                          const t = adjustTarget(i, splitDraft.optionIndex);
-                          if (!t) return null;
-                          const billed = Math.round((t.full * splitDraft.pct) / 100);
-                          return (
-                            <div className="rounded-lg border border-ink-200 bg-ink-50 p-3">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="font-medium text-ink-700">
-                                  Billable share of the {usdK(t.full)} overage
-                                </span>
-                                <span className="tabular font-semibold text-maroon">
-                                  {splitDraft.pct}%
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={splitDraft.pct}
-                                onChange={(e) =>
-                                  setSplitDraft((s) =>
-                                    s ? { ...s, pct: Number(e.target.value) } : s
-                                  )
-                                }
-                                className="mt-2 w-full accent-maroon"
-                              />
-                              <div className="tabular mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
-                                <span>
-                                  Bill{" "}
-                                  <span className="font-semibold text-ink-700">
-                                    {usd(billed)}
-                                  </span>{" "}
-                                  on the COR
-                                </span>
-                                <span>
-                                  Absorb{" "}
-                                  <span className="font-medium text-rose-600">
-                                    {usd(t.full - billed)}
-                                  </span>
-                                </span>
-                              </div>
-                              <div className="mt-2.5 flex items-center gap-2">
-                                <Button size="sm" onClick={confirmSplit}>
-                                  Bill {splitDraft.pct}% · {usdK(billed)}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => setSplitDraft(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      {isAwaiting && (
-                        <button
-                          onClick={turnAutonomous}
-                          className="text-[11px] font-medium text-maroon hover:text-maroon/70"
-                        >
-                          Or let it run the rest autonomously →
-                        </button>
-                      )}
-                    </div>
-                  )}
 
                   {isReviewCurrent && !step.decision && (
                     <div className="mt-2.5 space-y-2 border-t border-ink-100 pt-2.5">
@@ -894,7 +900,7 @@ export function FlagCard({
                         // The revised step the agent will now take — confirm or keep editing.
                         <div className="space-y-2.5">
                           <div className="rounded-lg border border-ink-200 bg-ink-50 p-2.5">
-                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-maroon">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-700">
                               <PenLine className="h-3 w-3" /> Revised step — what it&apos;ll
                               now do
                             </div>
@@ -957,7 +963,7 @@ export function FlagCard({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") approveReviewStep();
                             }}
-                            placeholder="Adjust this step or tell Margin Agent how (optional)…"
+                            placeholder="Adjust this step or tell Margin Protection Agent how (optional)…"
                             className="h-9 w-full rounded-md border border-ink-200 bg-white px-3 text-sm outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
                           />
                           <div className="flex flex-wrap items-center gap-2">
@@ -1005,41 +1011,20 @@ export function FlagCard({
                 </div>
               );
             })}
+            {nextPendingLabel && phase === "executing" && (
+              <div className="flex items-center gap-1.5 px-1 pt-0.5 text-[11px] text-ink-400">
+                <ChevronRight className="h-3 w-3" />
+                Up next · {nextPendingLabel}
+                {remainingCount > 1 ? ` · +${remainingCount - 1} more` : ""}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Actions / outcome */}
         {phase === "proposed" && (
-          <div className="mt-4">
-            <div className="mb-1.5 flex items-center justify-between px-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-400">
-              <span>Hands-on</span>
-              <span>Autonomy →</span>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                variant="secondary"
-                onClick={() => setPhase("review")}
-                className="flex-1"
-              >
-                Review each step
-              </Button>
-              <Button onClick={approveAndRun} className="flex-1">
-                Just keep me in the loop
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={runAutonomously}
-                className="flex-1"
-              >
-                Run autonomously
-              </Button>
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-              <span className="font-medium text-ink-600">Just keep me in the loop</span>{" "}
-              runs the plan and pauses only on the calls marked{" "}
-              <span className="font-medium text-maroon">your call</span> — the
-              balance between approving every step and letting it run on its own.
-            </p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-ink-400">
+            <Loader2 className="h-3 w-3 animate-spin text-ink-700" />
+            Walking you through it…
           </div>
         )}
 
@@ -1050,7 +1035,7 @@ export function FlagCard({
             </p>
             <button
               onClick={turnAutonomous}
-              className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-ink-50 px-2.5 py-1 text-xs font-medium text-maroon transition-colors hover:bg-ink-100"
+              className="inline-flex items-center gap-1 rounded-md border border-ink-200 bg-ink-50 px-2.5 py-1 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-100"
             >
               Continue autonomously →
             </button>
@@ -1058,16 +1043,15 @@ export function FlagCard({
         )}
 
         {phase === "executing" && awaiting !== null && (
-          <p className="mt-3 text-xs font-medium text-maroon">
-            Paused — your call above. Pick an option to continue, or hand the
-            rest off.
+          <p className="mt-3 text-xs font-medium text-ink-700">
+            Paused — your input is needed on the left.
           </p>
         )}
 
         {phase === "executing" && awaiting === null && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-maroon">
+          <div className="mt-4 flex items-center gap-2 text-sm text-ink-700">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Margin Agent is executing the plan…
+            Margin Protection Agent is executing the plan…
           </div>
         )}
 
@@ -1087,9 +1071,15 @@ export function FlagCard({
                 </div>
                 <div className="text-xs text-emerald-600">
                   {actionRan && `${actionVerb} for ${usd(actionAmt)} · `}
-                  {ranCount} of {flag.plan.length} steps run
+                  {ranCount} of {total} steps run
                   {skippedCount > 0 && ` · ${skippedCount} skipped`}.
                 </div>
+                {benchmarkRan && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600/80">
+                    <RefreshCw className="h-3 w-3" />
+                    {flag.costCodeName} rate reinforced — next bid won't run light here.
+                  </div>
+                )}
               </div>
             </div>
             <Check className="h-5 w-5 text-emerald-500" />
@@ -1106,8 +1096,264 @@ export function FlagCard({
         </div>
       </div>
     </div>
+
+    {/* Approval gate — portal above the conversation's chat bar; all agent→PM
+        input lives on the left, the right panel is pure plan output. */}
+    {gateSlot &&
+      createPortal(
+        <AnimatePresence>
+          {gatePanel && gateStep && (
+            <motion.div
+              key="gate"
+              className="px-4 pb-2 sm:px-6"
+              initial={{ y: 14, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 14, opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            >
+              <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-lift">
+                {/* Header — same for decisions and writes */}
+                <div className="flex items-start gap-2.5 border-b border-ink-100 bg-ink-50/60 px-4 py-3">
+                  <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      {gateStep.decision
+                        ? "Your call"
+                        : `Your approval · ${GATE_META[gatePanel.category].label}`}
+                    </div>
+                    <div className="text-sm font-semibold text-ink-700">
+                      {gateStep.label}
+                    </div>
+                  </div>
+                </div>
+
+                {gateStep.decision ? (
+                  <>
+                    {/* Decision body — question + options on the left */}
+                    <div className="scroll-thin max-h-[40vh] overflow-y-auto px-4 py-3.5">
+                      <p className="text-sm font-medium text-ink-700">
+                        {gateStep.decision!.question}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {gateStep.decision!.options.map((opt, oi) => (
+                          <button
+                            key={opt}
+                            onClick={() => chooseOption(gatePanel.idx, oi, opt)}
+                            className={cn(
+                              "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                              splitDraft?.decisionIdx === gatePanel.idx &&
+                                splitDraft?.optionIndex === oi
+                                ? "border-ink-400 bg-ink-100 text-ink-700 ring-1 ring-ink-300"
+                                : oi === gateStep.decision!.recommended
+                                ? "border-ink-300 bg-ink-50 text-ink-700 hover:bg-ink-100"
+                                : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                            )}
+                          >
+                            {opt}
+                            {gateStep.decision!.adjust?.[oi] && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
+                                set %
+                              </span>
+                            )}
+                            {oi === gateStep.decision!.recommended && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ink-400">
+                                rec
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Partial-bill control — PM dials in the billable split */}
+                      {splitDraft?.decisionIdx === gatePanel.idx &&
+                        (() => {
+                          const t = adjustTarget(gatePanel.idx, splitDraft.optionIndex);
+                          if (!t) return null;
+                          const billed = Math.round((t.full * splitDraft.pct) / 100);
+                          return (
+                            <div className="mt-3 rounded-lg border border-ink-200 bg-ink-50 p-3">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-ink-700">
+                                  Billable share of the {usdK(t.full)} overage
+                                </span>
+                                <span className="tabular font-semibold text-ink-700">
+                                  {splitDraft.pct}%
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={splitDraft.pct}
+                                onChange={(e) =>
+                                  setSplitDraft((s) =>
+                                    s ? { ...s, pct: Number(e.target.value) } : s
+                                  )
+                                }
+                                className="mt-2 w-full accent-ink-700"
+                              />
+                              <div className="tabular mt-1.5 flex items-center justify-between text-[11px] text-ink-500">
+                                <span>
+                                  Bill{" "}
+                                  <span className="font-semibold text-ink-700">
+                                    {usd(billed)}
+                                  </span>{" "}
+                                  on the COR
+                                </span>
+                                <span>
+                                  Absorb{" "}
+                                  <span className="font-medium text-ink-500">
+                                    {usd(t.full - billed)}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="mt-2.5 flex items-center gap-2">
+                                <Button size="sm" onClick={confirmSplit}>
+                                  Bill {splitDraft.pct}% · {usdK(billed)}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setSplitDraft(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                    </div>
+                    <div className="flex items-center border-t border-ink-100 px-4 py-3">
+                      <button
+                        onClick={turnAutonomous}
+                        className="text-[11px] font-medium text-ink-400 hover:text-ink-700"
+                      >
+                        Or let it run the rest autonomously →
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Write / draft / money gate body */}
+                    <div className="scroll-thin max-h-[40vh] overflow-y-auto px-4 py-3.5">
+                      <p className="text-sm leading-relaxed text-ink-700">{gateAsk}</p>
+
+                      <div className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-2 text-xs text-ink-600">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-700" />
+                        <span>{GATE_META[gatePanel.category].risk}</span>
+                      </div>
+
+                      {gatePanel.category === "money" && (
+                        <div className="mt-3 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-2.5">
+                          <div className="text-[10px] uppercase tracking-wide text-ink-400">
+                            Amount to commit
+                          </div>
+                          {gateEditing ? (
+                            <span className="mt-1 flex w-fit items-center rounded-md border border-ink-200 bg-white px-2">
+                              <span className="text-ink-400">$</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={amounts[gatePanel.idx] ?? Math.round(gateStep.targetsDollars)}
+                                onChange={(e) => {
+                                  const v = e.target.value === "" ? 0 : Number(e.target.value);
+                                  amountsRef.current[gatePanel.idx] = v;
+                                  setAmounts((a) => ({ ...a, [gatePanel.idx]: v }));
+                                }}
+                                className="tabular h-7 w-32 bg-transparent px-1 text-right text-sm text-ink-800 outline-none"
+                              />
+                            </span>
+                          ) : (
+                            <div className="tabular mt-0.5 text-lg font-semibold text-ink-700">
+                              {usd(gateAmt)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {gateStep.draft && (
+                        <div className="mt-3 rounded-lg border border-ink-200 bg-white p-3">
+                          <div className="space-y-0.5 border-b border-ink-100 pb-2 text-[11px]">
+                            <div>
+                              <span className="text-ink-400">To </span>
+                              <span className="text-ink-600">{gateStep.draft.to}</span>
+                            </div>
+                            <div>
+                              <span className="text-ink-400">Subject </span>
+                              <span className="font-medium text-ink-700">
+                                {gateStep.draft.subject}
+                              </span>
+                            </div>
+                          </div>
+                          <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-ink-600">
+                            {gateStep.draft.body}
+                          </pre>
+                          <button
+                            onClick={() => copyDraft(gatePanel.idx, gateStep.draft!)}
+                            className="mt-2.5 inline-flex items-center gap-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] font-medium text-ink-600 hover:border-ink-300 hover:text-ink-700"
+                          >
+                            {copied === gatePanel.idx ? (
+                              <>
+                                <Check className="h-3 w-3 text-ink-600" /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3" /> Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {(gatePanel.category === "budget" ||
+                        gatePanel.category === "estimating") &&
+                        gateStep.systems && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {gateStep.systems.map((s, si) => (
+                              <SystemChip key={si} system={s} />
+                            ))}
+                          </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 px-4 py-3">
+                      <Button size="sm" onClick={approveGate}>
+                        Approve
+                      </Button>
+                      {(gatePanel.category === "money" || gateStep.draft) && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setGateEditing((e) => !e)}
+                        >
+                          {gateEditing ? "Done" : "Edit"}
+                        </Button>
+                      )}
+                      <Button size="sm" variant="secondary" onClick={skipGate}>
+                        Skip
+                      </Button>
+                      <button
+                        onClick={dontAskAgain}
+                        className="ml-auto text-right text-[11px] font-medium text-ink-400 hover:text-ink-700"
+                      >
+                        Don&apos;t ask again for{" "}
+                        {GATE_META[gatePanel.category].label.toLowerCase()}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        gateSlot
+      )}
+    </>
   );
-}
+});
 
 function StepIcon({
   state,
@@ -1125,7 +1371,7 @@ function StepIcon({
       <div
         className={cn(
           "flex h-5 w-5 items-center justify-center rounded-full text-white",
-          loop ? "bg-ink-500" : "bg-emerald-500"
+          loop ? "bg-ink-500" : "bg-ink-600"
         )}
       >
         {loop ? <RefreshCw className="h-3 w-3" /> : <Check className="h-3 w-3" />}
@@ -1145,7 +1391,7 @@ function StepIcon({
     );
   if (state === "awaiting")
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-maroon/40 bg-ink-50 text-[10px] font-semibold text-maroon">
+      <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-ink-400 bg-ink-50 text-[10px] font-semibold text-ink-600">
         {idx + 1}
       </div>
     );
@@ -1154,7 +1400,7 @@ function StepIcon({
       className={cn(
         "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
         decision
-          ? "border-ink-300 text-maroon"
+          ? "border-ink-300 text-ink-700"
           : "border-ink-300 text-ink-400"
       )}
     >
@@ -1178,7 +1424,7 @@ function SystemChip({
       className={cn(
         "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]",
         write
-          ? "border-amber-200 bg-amber-50 text-amber-700"
+          ? "border-ink-300 bg-ink-100 text-ink-600"
           : "border-ink-200 bg-ink-50 text-ink-500"
       )}
     >
@@ -1210,7 +1456,7 @@ function Metric({
           tone === "danger"
             ? "text-rose-600"
             : tone === "brand"
-            ? "text-maroon"
+            ? "text-ink-700"
             : "text-ink-700"
         )}
       >

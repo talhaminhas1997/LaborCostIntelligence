@@ -1,16 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
   LayoutGrid,
-  BarChart3,
   ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ShieldCheck,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { Logo } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
-import { FlagCard } from "@/components/marginwatch/FlagCard";
+import { FlagCard, type FlagCardHandle } from "@/components/marginwatch/FlagCard";
 import { JobBoard } from "@/components/marginwatch/JobBoard";
 import {
   PORTFOLIO,
@@ -21,15 +31,18 @@ import {
 } from "@/lib/seed";
 import { chat } from "@/lib/api";
 import { cn, usd, usdK, type DistributiveOmit } from "@/lib/utils";
-import type { ChatMessage, Job } from "@/lib/types";
+import { GATE_META, type GateCategory } from "@/lib/engine";
+import type { ChatMessage, FlagKind, Job } from "@/lib/types";
 
 type Entry =
   | { id: number; kind: "agent"; text: string }
   | { id: number; kind: "user"; text: string }
   | { id: number; kind: "typing" }
   | { id: number; kind: "note"; tone: "monitoring" | "calm"; text: string }
+  | { id: number; kind: "progress"; text: string }
   | { id: number; kind: "flag"; jobId: string }
-  | { id: number; kind: "overview" };
+  | { id: number; kind: "overview" }
+  | { id: number; kind: "cta"; action: "reveal-plan"; jobId: string; label: string };
 
 const OVERVIEW = "overview";
 // Flags the agent holds back and surfaces one-per-resolve, in this order — the
@@ -42,6 +55,86 @@ const DISCLAIMER_SENTINEL = "␟";
 const SEED_DISCLAIMER =
   "Illustrative — figures from seeded demo data, not a live feed.";
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * The consultant's opening: like a good management consultant, the agent frames
+ * the situation, recommends a play with the reasoning, names the one risk worth
+ * managing and how it mitigates it, then drives toward starting the work.
+ */
+const PLAY: Record<
+  FlagKind,
+  { play: string; why: (cc: string) => string; risk: string; mitig: string }
+> = {
+  "added-scope": {
+    play: "bill the owner-directed work back as a change order",
+    why: (cc) =>
+      `the overage on ${cc} traces to ASI-014 and RFI-022 — that's added scope you're owed for, not your crew's inefficiency, and it's recoverable if we move inside the change-notice window`,
+    risk: "the GC pushes back on entitlement",
+    mitig:
+      "I'll attach the labor backup and the ASI narrative so the case is airtight before anything goes out",
+  },
+  "under-recovery": {
+    play: "recover the billable T&M that never got ticketed",
+    why: (cc) =>
+      `the ${cc} hours are legitimately billable under CO-003 — they just weren't captured before they aged`,
+    risk: "a few tickets are past the 30-day sign-off window",
+    mitig:
+      "I'll flag the at-risk ones and send a cover note rather than gamble the whole claim",
+  },
+  underbid: {
+    play: "get ahead of the bid gap — protect the back half and fix the next estimate",
+    why: (cc) =>
+      `there are no change events on ${cc}, so this reads as a bid miss, not recoverable scope — the real win is keeping the next job from inheriting it`,
+    risk: "there's actually GC-driven inefficiency we could claim",
+    mitig: "I'll confirm that diagnosis with you before we absorb a dollar",
+  },
+  rework: {
+    play: "carry a clean rework allowance and price it into the next bid",
+    why: (cc) =>
+      `the rework on ${cc} is mostly sunk — the value here is making sure it doesn't quietly repeat`,
+    risk: "little downside — this is bookkeeping plus a benchmark update",
+    mitig: "I'll just confirm the allowance with you",
+  },
+};
+
+/** Portfolio-level greeting — replaces the static chart with a conversational brief. */
+function buildPortfolioGreeting(
+  surfacedFlagged: Job[],
+  watching: Job[],
+  totalJobs: number
+): string {
+  if (surfacedFlagged.length === 0) {
+    return `Morning — nothing needs your attention right now. All ${totalJobs} jobs I'm tracking are on budget or below the surfacing threshold. I'll flag anything the moment it drifts into action territory.`;
+  }
+
+  const top = surfacedFlagged[0];
+  const tf = top.flag!;
+  const priorityLine = `Job ${top.number} is the priority: ${tf.costCodeName} running ${tf.overPct}% over, ${usdK(tf.marginAtRisk)} at risk — and the play is to ${PLAY[tf.kind].play}.`;
+
+  const others = surfacedFlagged.slice(1);
+  const othersLine =
+    others.length > 0
+      ? ` ${others.map((j) => `Job ${j.number} (${usdK(j.flag!.marginAtRisk)} at risk)`).join(", ")} ${others.length === 1 ? "is" : "are"} also flagged.`
+      : "";
+
+  const watchLine =
+    watching.length > 0
+      ? ` ${watching.length} more ${watching.length === 1 ? "is" : "are"} drifting below the threshold — I'm watching ${watching.length === 1 ? "it" : "them"} and will surface a plan the moment one crosses.`
+      : "";
+
+  return `Morning — ${surfacedFlagged.length} job${surfacedFlagged.length === 1 ? "" : "s"} need${surfacedFlagged.length === 1 ? "s" : ""} your attention out of ${totalJobs} I'm tracking.\n\n${priorityLine}${othersLine}${watchLine}\n\nOpen one on the left and I'll walk you through what I've put together.`;
+}
+
+function consultantBrief(job: Job): string {
+  const f = job.flag!;
+  const p = PLAY[f.kind];
+  return [
+    `Job ${job.number} — ${job.name}. ${f.summary} Left alone, margin slips ${f.marginNow}% → ${f.marginAtCompletion}% — about ${usdK(
+      f.marginAtRisk
+    )}.`,
+    `My read: ${p.play} — ${p.why(f.costCodeName)}. Let me walk you through how I'd protect it. I'll handle the legwork and only stop you where I need a call.`,
+  ].join("\n\n");
+}
 
 export default function MarginWatch() {
   // allFlagged holds all six; `flagged` is only what's been surfaced so far, so
@@ -69,19 +162,48 @@ export default function MarginWatch() {
       {
         id: nextId(),
         kind: "agent",
-        text: `Morning. I forecast cost-at-completion for all ${PORTFOLIO_STATS.jobsMonitored} active jobs off Miter's live actuals and watch each for drift — surfacing only the few where margin is genuinely at risk. ${flagged.length} need you today; open one on the left for the drift and a plan to approve.`,
+        text: buildPortfolioGreeting(
+          flagged,
+          monitoring,
+          PORTFOLIO_STATS.jobsMonitored
+        ),
       },
     ],
   }));
   const [activeId, setActiveId] = useState<string>(OVERVIEW);
-  // Mobile master-detail: show the board, or the open thread (not both).
-  const [mobilePane, setMobilePane] = useState<"board" | "thread">("board");
+  // Mobile master-detail: show the board, the conversation, or the living plan.
+  const [mobilePane, setMobilePane] = useState<"board" | "thread" | "plan">(
+    "board"
+  );
+  // The rail collapses to a thin status strip while you work a flagged job, so
+  // the conversation + living plan get room (Claude-Code-agent style split).
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  // The autonomy control panel (gear) — review/retune per-category approvals.
+  const [autonomyOpen, setAutonomyOpen] = useState(false);
   // Threads the user has opened, most-recent first — their chat history.
   const [history, setHistory] = useState<string[]>([]);
-  // Let the user collapse the portfolio panel for a bigger conversation.
-  const [rollupCollapsed, setRollupCollapsed] = useState(false);
+
+  // Tracks which flagged jobs have had their plan revealed (Phase 1 → Phase 2).
+  const [planRevealedByJob, setPlanRevealedByJob] = useState<
+    Record<string, boolean>
+  >({});
 
   const [resolved, setResolved] = useState<Set<string>>(new Set());
+  // Per-category approval preference, shared across every job this session.
+  // Everything defaults to "ask" — the agent never writes without approval until
+  // the PM explicitly grants autonomy for that category.
+  const [autonomy, setAutonomy] = useState<Record<GateCategory, "ask" | "auto">>(
+    () => ({
+      judgment: "ask",
+      money: "ask",
+      "external-msg": "ask",
+      "internal-msg": "ask",
+      estimating: "ask",
+      budget: "ask",
+    })
+  );
+  const setCategoryAuto = (c: GateCategory) =>
+    setAutonomy((a) => ({ ...a, [c]: "auto" }));
   // Starts at $0 and grows only as you act — no invented baseline.
   const [protectedAmt, setProtectedAmt] = useState(0);
   const [input, setInput] = useState("");
@@ -106,6 +228,37 @@ export default function MarginWatch() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [threads, activeId]);
 
+  // Daily follow-up: while a job stays open, the agent checks back like a
+  // colleague would — here simulated as one warm nudge shortly after you land.
+  const flagCardRef = useRef<FlagCardHandle>(null);
+  // Mount point for the approval gate — sits above the chat bar, so every
+  // agent→PM ask lives in the conversation (left), not a centred pop-up.
+  const [gateSlot, setGateSlot] = useState<HTMLDivElement | null>(null);
+  const nudgedRef = useRef(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (nudgedRef.current) return;
+      const open = flagged.filter((j) => !resolved.has(j.id) && j.flag);
+      if (!open.length) return;
+      nudgedRef.current = true;
+      const top = open[0];
+      const mins = Math.max(2, Math.round(top.flag!.plan.length / 2));
+      setThreads((prev) => ({
+        ...prev,
+        [OVERVIEW]: [
+          ...(prev[OVERVIEW] ?? []),
+          {
+            id: nextId(),
+            kind: "agent",
+            text: `Following up from yesterday — Job ${top.number}'s ${top.flag!.costCodeName} item is still open. It's a quick one, ~${mins} min to walk to done together. Want to knock it out now? I'll keep checking back till it's closed.`,
+          },
+        ],
+      }));
+    }, 5500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const entries = threads[activeId] ?? [];
 
   const push = (e: DistributiveOmit<Entry, "id">) =>
@@ -117,13 +270,14 @@ export default function MarginWatch() {
   /** Seed a thread the first time it's opened. */
   function seedThread(job: Job): Entry[] {
     if (job.status === "flagged") {
+      // Phase 1 opening — one-liner hook. The full briefing sequence is
+      // driven by openJob() with typing beats and timed messages.
       return [
         {
           id: nextId(),
           kind: "agent",
-          text: `Job ${job.number} — ${job.name}. Here's where ${job.flag!.costCode} ${job.flag!.costCodeName} lands at completion, the exposure, and a plan ready to protect the margin.`,
+          text: `Job ${job.number} — ${job.name}. I've been watching this one. Let me give you the quick read.`,
         },
-        { id: nextId(), kind: "flag", jobId: job.id },
       ];
     }
     if (job.status === "monitoring") {
@@ -149,16 +303,108 @@ export default function MarginWatch() {
   }
 
   function openJob(job: Job) {
+    const isNew = !threads[job.id];
     setThreads((prev) =>
       prev[job.id] ? prev : { ...prev, [job.id]: seedThread(job) }
     );
     setHistory((h) => [job.id, ...h.filter((id) => id !== job.id)]);
     setActiveId(job.id);
     setMobilePane("thread");
+    setRailCollapsed(!!job.flag);
+
+    // Phase 1 briefing sequence — runs once on first open of a flagged job.
+    // Two messages with typing beats, then a plan CTA.
+    if (isNew && job.flag) {
+      const f = job.flag;
+      const p = PLAY[f.kind];
+      const visibleSteps = f.plan.filter((s) => !s.feedsBenchmark).length;
+
+      // Beat 1 — situation (the cost driver + dollars at risk)
+      window.setTimeout(() => {
+        setThreads((prev) => ({
+          ...prev,
+          [job.id]: [
+            ...(prev[job.id] ?? []),
+            { id: nextId(), kind: "typing" },
+          ],
+        }));
+      }, 700);
+      window.setTimeout(() => {
+        setThreads((prev) => ({
+          ...prev,
+          [job.id]: [
+            ...(prev[job.id] ?? []).filter((e) => e.kind !== "typing"),
+            {
+              id: nextId(),
+              kind: "agent",
+              text: `${f.summary} ${cap(
+                p.why(f.costCodeName)
+              )}. ${usdK(f.marginAtRisk)} at risk — ${f.recoverability} recoverability.`,
+            },
+          ],
+        }));
+      }, 1700);
+
+      // Beat 2 — plan intro + CTA button
+      window.setTimeout(() => {
+        setThreads((prev) => ({
+          ...prev,
+          [job.id]: [
+            ...(prev[job.id] ?? []),
+            { id: nextId(), kind: "typing" },
+          ],
+        }));
+      }, 2400);
+      window.setTimeout(() => {
+        setThreads((prev) => ({
+          ...prev,
+          [job.id]: [
+            ...(prev[job.id] ?? []).filter((e) => e.kind !== "typing"),
+            {
+              id: nextId(),
+              kind: "agent",
+              text: `I've drafted a ${visibleSteps}-step plan to ${p.play}. The main calls are yours — I handle the legwork and only stop where I need a decision from you.`,
+            },
+            {
+              id: nextId(),
+              kind: "cta",
+              action: "reveal-plan" as const,
+              jobId: job.id,
+              label: `See the plan (${visibleSteps} steps) →`,
+            },
+          ],
+        }));
+      }, 3700);
+    }
   }
+
+  /** Reveal the living plan on the right — transitions Phase 1 → Phase 2. */
+  function revealPlan(jobId: string) {
+    setPlanRevealedByJob((prev) => ({ ...prev, [jobId]: true }));
+    const job = jobById(jobId);
+    if (!job?.flag) return;
+    const f = job.flag;
+    const visibleSteps = f.plan.filter((s) => !s.feedsBenchmark).length;
+    // Short delay so the panel appears first, then the follow-up lands.
+    window.setTimeout(() => {
+      setThreads((prev) => ({
+        ...prev,
+        [jobId]: [
+          ...(prev[jobId] ?? []),
+          {
+            id: nextId(),
+            kind: "agent",
+            text: `There it is — ${visibleSteps} steps. The decisions that need you are marked. Want to walk through it together, or should I just run it?`,
+          },
+        ],
+      }));
+    }, 350);
+  }
+
   function openOverview() {
     setActiveId(OVERVIEW);
     setMobilePane("thread");
+    setRailCollapsed(false);
   }
 
   function chatHistory(): ChatMessage[] {
@@ -186,7 +432,6 @@ export default function MarginWatch() {
       overPct: f.overPct,
       kind: f.kind,
       marginImpact: `${f.marginNow}% → ${f.marginAtCompletion}% at completion`,
-      // Cost-code-level data so the agent can answer detailed questions.
       costCodes: job.costLines.map((c) => ({
         code: c.code,
         name: c.name,
@@ -291,6 +536,25 @@ export default function MarginWatch() {
         ],
       }));
 
+    // Plain-English plan edits ("skip the GC letter", "bill only $40k") are
+    // handled by the living plan itself — it updates and the agent confirms.
+    const activeJobNow = jobById(activeId);
+    if (activeJobNow?.flag && flagCardRef.current) {
+      const edit = flagCardRef.current.applyPlanEdit(q);
+      if (edit.ok) {
+        await new Promise((r) => window.setTimeout(r, 500));
+        setThreads((prev) => ({
+          ...prev,
+          [threadId]: [
+            ...(prev[threadId] ?? []).filter((e) => e.kind !== "typing"),
+            { id: nextId(), kind: "agent", text: edit.reply },
+          ],
+        }));
+        setSending(false);
+        return;
+      }
+    }
+
     // Common questions answer deterministically from the seeded portfolio.
     const seeded = seededReply(q);
     if (seeded) {
@@ -386,21 +650,28 @@ export default function MarginWatch() {
     const remaining = flagged.filter(
       (j) => !resolved.has(j.id) && j.id !== job.id
     );
-    const did =
-      actionedDollars > 0
-        ? `${usd(actionedDollars)} actioned on Job ${job.number} via change order, and the ${job.flag!.costCodeName} benchmark is updated.`
-        : `Reviewed Job ${job.number} — you deferred the action for now.`;
-    const next =
-      remaining.length > 0
-        ? ` ${remaining.length} more need you; Job ${remaining[0].number} is next at ${usdK(
-            remaining[0].flag!.marginAtRisk
-          )} at risk.`
-        : ` That clears every job that needs you today — the rest are tracking on budget.`;
+    const f = job.flag!;
+
+    let closeMsg: string;
+    if (actionedDollars > 0) {
+      const nextPart =
+        remaining.length > 0
+          ? ` Job ${remaining[0].number} is next when you're ready.`
+          : ` That clears everything on your plate today — well played.`;
+      closeMsg =
+        `That's a wrap on Job ${job.number}. ${usd(actionedDollars)} actioned on ${f.costCodeName} — change order drafted, budget rebaselined, team briefed. ` +
+        `I'll keep this cost code on my radar; if the same pattern shows on a future bid, I'll catch it before it bites.${nextPart}`;
+    } else {
+      const nextPart =
+        remaining.length > 0 ? ` Job ${remaining[0].number} is still waiting.` : "";
+      closeMsg = `Reviewed Job ${job.number} — you've deferred for now. I'll keep it open and check back.${nextPart}`;
+    }
+
     setThreads((prev) => ({
       ...prev,
       [job.id]: [
         ...(prev[job.id] ?? []),
-        { id: nextId(), kind: "agent", text: did + next },
+        { id: nextId(), kind: "agent", text: closeMsg },
       ],
     }));
 
@@ -412,6 +683,8 @@ export default function MarginWatch() {
   }
 
   const activeJob = activeId === OVERVIEW ? null : jobById(activeId) ?? null;
+  const isFlaggedOpen = !!activeJob?.flag;
+  const planVisible = isFlaggedOpen && !!planRevealedByJob[activeJob?.id ?? ""];
 
   /** Next-step suggestions that adapt to the conversation — the agent drops
    *  what's been covered and proposes the next thing worth asking. */
@@ -428,7 +701,19 @@ export default function MarginWatch() {
       return (left.length >= 2 ? left : [...left, ...forward]).slice(0, 3);
     };
 
-    // A flagged job already resolved → propose moving on.
+    // Phase 1 — plan not revealed yet; offer discovery questions
+    if (isFlaggedOpen && !planVisible) {
+      return fromPool(
+        [
+          { chip: "Why is it drifting?", re: /why.*(drift|over|driv)|what.*driv/ },
+          { chip: "Is it recoverable?", re: /recover|claw|billable|salvage/ },
+          { chip: "How confident are you?", re: /confiden|how.*sure|how.*know|trust/ },
+        ],
+        ["What's the biggest risk?"]
+      );
+    }
+
+    // Phase 3 — resolved
     if (activeJob?.flag && resolved.has(activeJob.id)) {
       return [
         "What's the next-worst job?",
@@ -437,6 +722,7 @@ export default function MarginWatch() {
       ];
     }
 
+    // Phase 2 — plan visible, executing
     if (activeJob?.flag) {
       return fromPool(
         [
@@ -466,13 +752,21 @@ export default function MarginWatch() {
   }
   const chips = suggestChips();
 
+  const gridCols = planVisible
+    ? railCollapsed
+      ? "lg:grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)]"
+      : "lg:grid-cols-[300px_minmax(0,1fr)_minmax(0,1fr)]"
+    : railCollapsed
+    ? "lg:grid-cols-[56px_minmax(0,1fr)]"
+    : "lg:grid-cols-[300px_minmax(0,1fr)]";
+
   return (
-    <div className="grid h-[calc(100vh-3.5rem)] grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
-      {/* Job board */}
+    <div className={cn("grid h-[calc(100vh-3.5rem)] grid-cols-1", gridCols)}>
+      {/* Jobs rail */}
       <aside
         className={cn(
           "min-h-0 border-r border-ink-200 lg:block",
-          mobilePane === "thread" ? "hidden" : "block"
+          mobilePane === "board" ? "block" : "hidden"
         )}
       >
         <JobBoard
@@ -481,64 +775,74 @@ export default function MarginWatch() {
           recent={history.map((id) => jobById(id)).filter(Boolean) as Job[]}
           activeThreadId={activeId}
           resolvedJobs={resolved}
-          protectedAmt={protectedAmt}
-          jobsMonitored={PORTFOLIO_STATS.jobsMonitored}
           newlySurfaced={newlySurfaced}
+          collapsed={railCollapsed}
+          onToggleCollapsed={() => setRailCollapsed((c) => !c)}
           onSelectJob={openJob}
           onSelectOverview={openOverview}
+          onNew={openOverview}
         />
       </aside>
 
-      {/* Active thread */}
+      {/* Conversation */}
       <div
         className={cn(
           "min-h-0 flex-col lg:flex",
-          mobilePane === "board" ? "hidden" : "flex"
+          mobilePane === "thread" ? "flex" : "hidden"
         )}
       >
         <ThreadHeader
           job={activeJob}
           resolved={activeJob ? resolved.has(activeJob.id) : false}
           onBack={() => setMobilePane("board")}
+          onSettings={() => setAutonomyOpen(true)}
+          rightSlot={
+            planVisible ? (
+              <button
+                onClick={() => setMobilePane("plan")}
+                className="flex items-center gap-1 rounded-md border border-ink-200 px-2 py-1 text-[11px] font-medium text-ink-600 lg:hidden"
+              >
+                Plan <ChevronRight className="h-3 w-3" />
+              </button>
+            ) : null
+          }
         />
-
-        {/* Portfolio roll-up — pinned under the Overview header; collapsible */}
-        {activeId === OVERVIEW && (
-          <div className="border-b border-ink-200 bg-white px-4 pt-4 sm:px-6">
-            <div className="mx-auto max-w-2xl pb-4">
-              <PortfolioRollup
-                flagged={flagged}
-                monitoring={monitoring}
-                calm={calm}
-                mitigated={protectedAmt}
-                collapsed={rollupCollapsed}
-                onToggle={() => setRollupCollapsed((c) => !c)}
-              />
-            </div>
-          </div>
-        )}
 
         <div className="scroll-thin flex-1 overflow-y-auto bg-neutral-50/40 px-4 py-5 sm:px-6">
           <div className="mx-auto max-w-2xl space-y-4">
-            {entries.map((e) => (
-              <motion.div
-                key={e.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {e.kind === "agent" && <AgentBubble text={e.text} />}
-                {e.kind === "user" && <UserBubble text={e.text} />}
-                {e.kind === "typing" && <Typing />}
-                {e.kind === "note" && <NoteBubble tone={e.tone} text={e.text} />}
-                {e.kind === "flag" && jobById(e.jobId) && (
-                  <FlagCard job={jobById(e.jobId)!} onResolved={onResolved} />
-                )}
-              </motion.div>
-            ))}
+            {entries
+              .filter((e) => e.kind !== "flag" && e.kind !== "overview")
+              .map((e) => (
+                <motion.div
+                  key={e.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {e.kind === "agent" && <AgentBubble text={e.text} />}
+                  {e.kind === "user" && <UserBubble text={e.text} />}
+                  {e.kind === "typing" && <Typing />}
+                  {e.kind === "note" && <NoteBubble tone={e.tone} text={e.text} />}
+                  {e.kind === "progress" && <ProgressLine text={e.text} />}
+                  {e.kind === "cta" && e.action === "reveal-plan" && !planVisible && (
+                    <div className="pl-9">
+                      <button
+                        onClick={() => revealPlan(e.jobId)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink-700"
+                      >
+                        {e.label}
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
             <div ref={bottomRef} />
           </div>
         </div>
+
+        {/* Approval gate mounts here — just above the chat bar (left section) */}
+        <div ref={setGateSlot} />
 
         {/* Composer */}
         <div className="border-t border-ink-200 bg-white px-4 py-3 sm:px-6">
@@ -549,7 +853,7 @@ export default function MarginWatch() {
                   key={c}
                   onClick={() => send(c)}
                   disabled={sending}
-                  className="rounded-full border border-ink-200 bg-white px-3 py-1 text-xs text-ink-600 transition hover:border-ink-300 hover:text-maroon disabled:opacity-50"
+                  className="rounded-full border border-ink-200 bg-white px-3 py-1 text-xs text-ink-600 transition hover:border-ink-300 hover:text-ink-700 disabled:opacity-50"
                 >
                   {c}
                 </button>
@@ -567,8 +871,8 @@ export default function MarginWatch() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={
                   activeJob
-                    ? `Ask about Job ${activeJob.number}…`
-                    : "Ask Margin Agent about your portfolio…"
+                    ? `Talk to Margin Protection Agent about Job ${activeJob.number}…`
+                    : "Ask Margin Protection Agent about your portfolio…"
                 }
                 className="h-11 flex-1 rounded-lg border border-ink-200 bg-white px-4 text-sm outline-none focus:border-ink-400 focus:ring-2 focus:ring-ink-100"
               />
@@ -579,6 +883,55 @@ export default function MarginWatch() {
           </div>
         </div>
       </div>
+
+      {/* Living plan — the right side of the split for a flagged job.
+          Only appears after the user clicks "See the plan →" (Phase 2). */}
+      {planVisible && activeJob && (
+        <div
+          className={cn(
+            "min-h-0 flex-col border-l border-ink-200 lg:flex",
+            mobilePane === "plan" ? "flex" : "hidden"
+          )}
+        >
+          <div className="flex items-center gap-2 border-b border-ink-200 bg-white px-4 py-3 sm:px-6">
+            <button
+              onClick={() => setMobilePane("thread")}
+              className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 lg:hidden"
+              aria-label="Back to conversation"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <div className="text-sm font-semibold text-ink-700">Plan</div>
+              <div className="text-[11px] text-ink-500">
+                Nothing writes without your go-ahead
+              </div>
+            </div>
+          </div>
+          <div className="scroll-thin flex-1 overflow-y-auto bg-neutral-50/40 px-4 py-5 sm:px-6">
+            <div className="mx-auto max-w-2xl">
+              <FlagCard
+                key={activeJob.id}
+                ref={flagCardRef}
+                job={activeJob}
+                onResolved={onResolved}
+                autonomy={autonomy}
+                setCategoryAuto={setCategoryAuto}
+                gateSlot={gateSlot}
+                onNarrate={(text) =>
+                  setThreads((prev) => ({
+                    ...prev,
+                    [activeJob.id]: [
+                      ...(prev[activeJob.id] ?? []),
+                      { id: nextId(), kind: "progress", text },
+                    ],
+                  }))
+                }
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scanning beat — the agent visibly checks live actuals for ~1.5s right
           before a new flag surfaces, so the reveal reads as "it caught one." */}
@@ -593,7 +946,7 @@ export default function MarginWatch() {
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand-500" />
           </span>
           <span className="text-xs font-medium text-ink-600">
-            Margin Agent · scanning live actuals…
+            Margin Protection Agent · scanning live actuals…
           </span>
         </motion.div>
       )}
@@ -615,12 +968,123 @@ export default function MarginWatch() {
             <ShieldCheck className="h-3 w-3" />
           </span>
           <span className="text-xs leading-snug">
-            <span className="block font-semibold text-maroon">New job needs you</span>
+            <span className="block font-semibold text-ink-700">New job needs you</span>
             <span className="text-ink-500">{toast.text}</span>
           </span>
         </motion.button>
       )}
+
+      <AutonomyPanel
+        open={autonomyOpen}
+        autonomy={autonomy}
+        setAutonomy={setAutonomy}
+        onClose={() => setAutonomyOpen(false)}
+      />
     </div>
+  );
+}
+
+/* ------------------------------------------ autonomy control panel (gear) */
+
+const GATE_ORDER: GateCategory[] = [
+  "judgment",
+  "money",
+  "external-msg",
+  "internal-msg",
+  "budget",
+  "estimating",
+];
+
+function AutonomyPanel({
+  open,
+  autonomy,
+  setAutonomy,
+  onClose,
+}: {
+  open: boolean;
+  autonomy: Record<GateCategory, "ask" | "auto">;
+  setAutonomy: Dispatch<SetStateAction<Record<GateCategory, "ask" | "auto">>>;
+  onClose: () => void;
+}) {
+  const askCount = GATE_ORDER.filter((c) => autonomy[c] === "ask").length;
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex justify-end"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="absolute inset-0 bg-ink-900/20" onClick={onClose} />
+          <motion.aside
+            className="scroll-thin relative flex h-full w-full max-w-sm flex-col overflow-y-auto bg-white shadow-lift"
+            initial={{ x: 24, opacity: 0.6 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 24, opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 320 }}
+          >
+            <div className="flex items-start justify-between border-b border-ink-200 px-5 py-4">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-700">
+                  What I do on my own
+                </h3>
+                <p className="mt-0.5 text-[11px] text-ink-500">
+                  I stop for your approval on {askCount} of {GATE_ORDER.length}.
+                  Flip any to Auto when you trust me with it.
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="-mr-1 flex h-7 w-7 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 px-3 py-3">
+              {GATE_ORDER.map((c) => (
+                <div
+                  key={c}
+                  className="flex items-start justify-between gap-3 rounded-lg px-2 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-ink-800">
+                      {GATE_META[c].label}
+                    </div>
+                    <div className="mt-0.5 text-[11px] leading-snug text-ink-500">
+                      {GATE_META[c].blurb}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 rounded-lg border border-ink-200 p-0.5">
+                    {(["ask", "auto"] as const).map((pref) => (
+                      <button
+                        key={pref}
+                        onClick={() =>
+                          setAutonomy((a) => ({ ...a, [c]: pref }))
+                        }
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-[11px] font-medium capitalize transition-colors",
+                          autonomy[c] === pref
+                            ? "bg-ink-800 text-white"
+                            : "text-ink-500 hover:text-ink-700"
+                        )}
+                      >
+                        {pref === "ask" ? "Ask me" : "Auto"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-ink-100 px-5 py-3 text-[11px] text-ink-400">
+              I never touch another system or send anything on Auto without it
+              being reversible or yours to send.
+            </div>
+          </motion.aside>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -630,11 +1094,26 @@ function ThreadHeader({
   job,
   resolved,
   onBack,
+  rightSlot,
+  onSettings,
 }: {
   job: Job | null;
   resolved: boolean;
   onBack: () => void;
+  rightSlot?: ReactNode;
+  onSettings?: () => void;
 }) {
+  const Gear = () =>
+    onSettings ? (
+      <button
+        onClick={onSettings}
+        aria-label="Approval settings"
+        title="Approval settings — what the agent does on its own"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 hover:bg-ink-100 hover:text-ink-600"
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+      </button>
+    ) : null;
   const Back = () => (
     <button
       onClick={onBack}
@@ -648,14 +1127,17 @@ function ThreadHeader({
     return (
       <div className="flex items-center gap-2 border-b border-ink-200 bg-white px-3 py-3 sm:px-6">
         <Back />
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-maroon/5 text-maroon">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
           <LayoutGrid className="h-4 w-4" />
         </div>
         <div>
-          <div className="text-sm font-semibold text-maroon">Overview</div>
+          <div className="text-sm font-semibold text-ink-700">Overview</div>
           <div className="text-[11px] text-ink-500">
             Portfolio briefing · the few jobs that need you
           </div>
+        </div>
+        <div className="ml-auto">
+          <Gear />
         </div>
       </div>
     );
@@ -663,18 +1145,18 @@ function ThreadHeader({
   const tone =
     job.status === "flagged"
       ? resolved
-        ? { chip: "bg-emerald-100 text-emerald-700", label: "Handled" }
-        : { chip: "bg-rose-100 text-rose-700", label: "Needs you" }
+        ? { chip: "bg-ink-100 text-ink-600", label: "Resolved" }
+        : { chip: "bg-ink-100 text-ink-700", label: "Needs you" }
       : job.status === "monitoring"
-      ? { chip: "bg-amber-100 text-amber-700", label: "Watching" }
-      : { chip: "bg-emerald-100 text-emerald-700", label: "On budget" };
+      ? { chip: "bg-ink-100 text-ink-600", label: "Watching" }
+      : { chip: "bg-ink-100 text-ink-600", label: "On budget" };
   return (
     <div className="flex items-center justify-between gap-3 border-b border-ink-200 bg-white px-3 py-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-1.5">
         <Back />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-maroon">
+            <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-ink-700">
               Job {job.number}
             </span>
             <span className="truncate text-xs text-ink-500">· {job.name}</span>
@@ -684,111 +1166,18 @@ function ThreadHeader({
           </div>
         </div>
       </div>
-      <span
-        className={cn(
-          "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
-          tone.chip
-        )}
-      >
-        {tone.label}
-      </span>
-    </div>
-  );
-}
-
-function RollStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "danger" | "brand";
-}) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wide text-ink-400">{label}</div>
-      <div
-        className={cn(
-          "tabular mt-0.5 text-lg font-semibold",
-          tone === "danger"
-            ? "text-rose-600"
-            : tone === "brand"
-            ? "text-maroon"
-            : "text-ink-800"
-        )}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function PortfolioRollup({
-  flagged,
-  monitoring,
-  calm,
-  mitigated,
-  collapsed,
-  onToggle,
-}: {
-  flagged: Job[];
-  monitoring: Job[];
-  calm: Job[];
-  mitigated: number;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  const all = [...flagged, ...monitoring, ...calm];
-  const total = all.length || 1;
-  const totalContract = all.reduce((s, j) => s + j.contractValue, 0);
-  const surfacedAtRisk = flagged.reduce((s, j) => s + j.flag!.marginAtRisk, 0);
-  const seg = (n: number) => (n / total) * 100;
-  return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-soft">
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center gap-2 text-left"
-      >
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-maroon/5 text-maroon">
-          <BarChart3 className="h-4 w-4" />
-        </div>
-        <h3 className="text-sm font-semibold text-ink-900">Portfolio roll-up</h3>
-        {collapsed ? (
-          <span className="tabular text-[11px] text-ink-400">
-            · <span className="font-medium text-rose-600">{usdK(surfacedAtRisk)}</span> at risk · {flagged.length} need you
-          </span>
-        ) : (
-          <span className="text-[11px] text-ink-400">· {all.length} active jobs</span>
-        )}
-        <ChevronDown
+      <div className="flex shrink-0 items-center gap-2">
+        <span
           className={cn(
-            "ml-auto h-4 w-4 text-ink-400 transition-transform",
-            collapsed && "-rotate-90"
+            "rounded-full px-2.5 py-1 text-[11px] font-medium",
+            tone.chip
           )}
-        />
-      </button>
-      {!collapsed && (
-        <>
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <RollStat label="Contract value" value={`$${(totalContract / 1e6).toFixed(1)}M`} />
-        <RollStat label="Surfaced at risk" value={usdK(surfacedAtRisk)} tone="danger" />
-        <RollStat label="Acted on" value={usd(mitigated)} tone="brand" />
+        >
+          {tone.label}
+        </span>
+        {rightSlot}
+        <Gear />
       </div>
-      <div className="mt-3.5">
-        <div className="flex h-2 overflow-hidden rounded-full bg-ink-100">
-          <div className="bg-rose-400" style={{ width: `${seg(flagged.length)}%` }} />
-          <div className="bg-amber-400" style={{ width: `${seg(monitoring.length)}%` }} />
-          <div className="bg-emerald-400" style={{ width: `${seg(calm.length)}%` }} />
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink-500">
-          <span className="text-rose-600">● {flagged.length} need you</span>
-          <span className="text-amber-600">● {monitoring.length} watching</span>
-          <span className="text-emerald-600">● {calm.length} on budget</span>
-        </div>
-      </div>
-        </>
-      )}
     </div>
   );
 }
@@ -821,9 +1210,19 @@ function AgentBubble({ text }: { text: string }) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-maroon px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
+      <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-ink-800 px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm">
         {text}
       </div>
+    </div>
+  );
+}
+
+/** A light narration line — the agent talking you through what it just did. */
+function ProgressLine({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 pl-10 text-xs text-ink-500">
+      <span className="font-medium">{text.slice(0, 1)}</span>
+      <span>{text.slice(1).trim()}</span>
     </div>
   );
 }
@@ -844,8 +1243,8 @@ function NoteBubble({
         className={cn(
           "max-w-[88%] rounded-2xl rounded-tl-sm border px-4 py-2.5 text-sm leading-relaxed shadow-soft",
           tone === "monitoring"
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? "border-ink-200 bg-ink-50 text-ink-700"
+            : "border-ink-200 bg-ink-50 text-ink-700"
         )}
       >
         {text}

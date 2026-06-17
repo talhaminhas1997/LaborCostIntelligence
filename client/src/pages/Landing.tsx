@@ -213,7 +213,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 3 — Margin Agent */}
+      {/* 3 — Margin Protection Agent */}
       <section id="agent" className="border-t border-ink-200 bg-neutral-100">
         <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <motion.div {...fadeUp} className="text-center">
@@ -416,7 +416,7 @@ export default function Landing() {
               </div>
               <div className="bg-white p-7">
                 <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-maroon">
-                  Margin Agent adds
+                  Margin Protection Agent adds
                 </div>
                 <ul className="mt-4 space-y-2.5">
                   {AGENT_ADDS.map((a) => (
@@ -431,7 +431,7 @@ export default function Landing() {
           </motion.div>
 
           <motion.p {...fadeUp} className="mt-12 max-w-3xl text-sm leading-relaxed text-ink-500">
-            Margin Agent is the always-on employee you hire to protect margin
+            Margin Protection Agent is the always-on employee you hire to protect margin
             across the whole job — labor-cost vigilance for ops today;
             estimating, finance, and every role that touches margin next.
           </motion.p>
@@ -450,7 +450,7 @@ export default function Landing() {
             <span className="text-maroon">you&apos;ve won.</span>
           </motion.h2>
           <motion.p {...fadeUp} className="mx-auto mt-5 max-w-xl text-lg text-ink-500">
-            Put an always-on employee on your margin — Margin Agent surfaces the
+            Put an always-on employee on your margin — Margin Protection Agent surfaces the
             risks that matter and takes the fix to done, on your approval.
           </motion.p>
           <motion.div {...fadeUp} className="mt-9">
@@ -538,7 +538,7 @@ function AgentDiagram() {
       <div className="mt-5 text-center">
         <div className="flex items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-maroon">
           <span className="signal-pulse h-1.5 w-1.5 rounded-full bg-brand-500" />
-          Margin Agent
+          Margin Protection Agent
         </div>
         <div className="mt-1 font-mono text-[11px] tracking-wide text-ink-400">
           monitor · surface · act
@@ -687,7 +687,7 @@ function ScopeCard({ state }: { state: "alone" | "agent" }) {
             <Radar className="h-3.5 w-3.5" />
           </span>
           <span className="text-xs font-medium text-maroon">
-            Margin Agent · watching all 30
+            Margin Protection Agent · watching all 30
           </span>
         </div>
       )}
