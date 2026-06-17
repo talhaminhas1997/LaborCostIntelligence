@@ -391,7 +391,7 @@ export default function MarginWatch() {
           {
             id: nextId(),
             kind: "agent",
-            text: `There it is — ${visibleSteps} steps. I'll handle the reads and only stop at the calls that need your judgment.`,
+            text: `There it is — ${visibleSteps} steps. Want me to keep you in the loop as I go, or run it autonomously?`,
           },
           {
             id: nextId(),
@@ -844,23 +844,23 @@ export default function MarginWatch() {
                       <button
                         onClick={() => {
                           setExecutionStartedByJob((prev) => ({ ...prev, [e.jobId]: true }));
-                          push({ kind: "user", text: "Walk me through it" });
+                          push({ kind: "user", text: "Keep me in the loop" });
                           flagCardRef.current?.start();
                         }}
                         className="inline-flex items-center gap-2 rounded-lg bg-ink-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-ink-700"
                       >
-                        Walk me through it
+                        Keep me in the loop
                         <ChevronRight className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => {
                           setExecutionStartedByJob((prev) => ({ ...prev, [e.jobId]: true }));
-                          push({ kind: "user", text: "Run it autonomously" });
+                          push({ kind: "user", text: "Execute autonomously" });
                           flagCardRef.current?.startAutonomously();
                         }}
                         className="inline-flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-4 py-2.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50"
                       >
-                        Run it autonomously
+                        Execute autonomously
                       </button>
                     </div>
                   )}
