@@ -834,7 +834,9 @@ export const FlagCard = forwardRef<
               if (step.feedsBenchmark) return null;
               // Progressive reveal — the plan consolidates as the agent walks
               // you through it; upcoming steps stay hidden until reached.
-              if (st === "pending" && !isReviewCurrent) return null;
+              // Exception: in "proposed" phase the full plan is shown as a
+              // preview so the user can see what they're approving.
+              if (st === "pending" && !isReviewCurrent && phase !== "proposed") return null;
               return (
                 <div
                   key={step.id}
