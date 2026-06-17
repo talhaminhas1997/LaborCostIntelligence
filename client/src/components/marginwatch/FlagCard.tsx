@@ -44,6 +44,10 @@ export type FlagCardHandle = {
   /** Apply a plain-English plan edit from the conversation. Returns whether it
    *  was handled and the line the agent should reply with. */
   applyPlanEdit: (text: string) => { ok: boolean; reply: string };
+  /** Begin gated execution — called from the left panel when the user confirms. */
+  start: () => void;
+  /** Begin fully-autonomous execution — agent takes every recommended call. */
+  startAutonomously: () => void;
 };
 
 export const FlagCard = forwardRef<
@@ -59,9 +63,12 @@ export const FlagCard = forwardRef<
     /** Where to render the approval gate — a slot above the conversation's
      *  chat bar, so all agent→PM input stays on the left. */
     gateSlot?: HTMLElement | null;
+    /** When false, execution does not start automatically on mount — the parent
+     *  calls start() or startAutonomously() from the conversation. */
+    autoStart?: boolean;
   }
 >(function FlagCard(
-  { job, onResolved, onNarrate, autonomy, setCategoryAuto, gateSlot },
+  { job, onResolved, onNarrate, autonomy, setCategoryAuto, gateSlot, autoStart = true },
   ref
 ) {
   const flag = job.flag!;
@@ -245,10 +252,12 @@ export const FlagCard = forwardRef<
     runAuto(0);
   }
 
-  // Walk-through: on open, the agent starts walking you through after a beat —
-  // no "Start" button. It runs the reads itself and stops at the first call.
+  // Auto-start: when autoStart is true (default), begin executing after a short
+  // beat so the plan panel has time to appear. When false, the parent drives
+  // start() from the conversation once the user confirms.
   const startedRef = useRef(false);
   useEffect(() => {
+    if (!autoStart) return;
     const t = window.setTimeout(() => {
       if (!startedRef.current) {
         startedRef.current = true;
@@ -340,7 +349,7 @@ export const FlagCard = forwardRef<
     return { ok: false, reply: "" };
   }
 
-  useImperativeHandle(ref, () => ({ applyPlanEdit }));
+  useImperativeHandle(ref, () => ({ applyPlanEdit, start: approveAndRun, startAutonomously: runAutonomously }));
 
   /** Run the whole plan without stopping — agent takes every recommended call. */
   function runAutonomously() {

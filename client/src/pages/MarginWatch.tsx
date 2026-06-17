@@ -187,6 +187,10 @@ export default function MarginWatch() {
   const [planRevealedByJob, setPlanRevealedByJob] = useState<
     Record<string, boolean>
   >({});
+  // Tracks which jobs the user has explicitly kicked off execution for.
+  const [executionStartedByJob, setExecutionStartedByJob] = useState<
+    Record<string, boolean>
+  >({});
 
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   // Per-category approval preference, shared across every job this session.
@@ -394,7 +398,7 @@ export default function MarginWatch() {
           {
             id: nextId(),
             kind: "agent",
-            text: `There it is — ${visibleSteps} steps. The decisions that need you are marked. Want to walk through it together, or should I just run it?`,
+            text: `There it is — ${visibleSteps} steps. I'll handle the reads and only stop at the calls that need your judgment. Ready to walk through it?`,
           },
         ],
       }));
@@ -536,9 +540,31 @@ export default function MarginWatch() {
         ],
       }));
 
+    // Start chips — user confirms they want to begin execution from the left panel.
+    const activeJobNow = jobById(activeId);
+    if (
+      activeJobNow?.flag &&
+      planRevealedByJob[activeId] &&
+      !executionStartedByJob[activeId] &&
+      flagCardRef.current &&
+      /walk.*through|run.*auto|let.*go|start|begin|yes\b|yeah|sure|ready|ok\b/i.test(q)
+    ) {
+      setExecutionStartedByJob((prev) => ({ ...prev, [activeId]: true }));
+      setSending(false);
+      setThreads((prev) => ({
+        ...prev,
+        [activeId]: (prev[activeId] ?? []).filter((e) => e.kind !== "typing"),
+      }));
+      if (/auto|just run|run it/i.test(q)) {
+        flagCardRef.current.startAutonomously();
+      } else {
+        flagCardRef.current.start();
+      }
+      return;
+    }
+
     // Plain-English plan edits ("skip the GC letter", "bill only $40k") are
     // handled by the living plan itself — it updates and the agent confirms.
-    const activeJobNow = jobById(activeId);
     if (activeJobNow?.flag && flagCardRef.current) {
       const edit = flagCardRef.current.applyPlanEdit(q);
       if (edit.ok) {
@@ -711,6 +737,11 @@ export default function MarginWatch() {
         ],
         ["What's the biggest risk?"]
       );
+    }
+
+    // Plan revealed but not yet started — invite the user to kick off
+    if (isFlaggedOpen && planVisible && activeJob && !executionStartedByJob[activeJob.id]) {
+      return ["Walk me through it", "Run it autonomously"];
     }
 
     // Phase 3 — resolved
@@ -918,6 +949,7 @@ export default function MarginWatch() {
                 autonomy={autonomy}
                 setCategoryAuto={setCategoryAuto}
                 gateSlot={gateSlot}
+                autoStart={false}
                 onNarrate={(text) =>
                   setThreads((prev) => ({
                     ...prev,
